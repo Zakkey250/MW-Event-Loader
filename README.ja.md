@@ -323,4 +323,6 @@ MW Event Editor：<https://zakkey250.github.io/MW-Event-Editor/>
 
 ## 利用条件
 
+現行のEvent Loader・HUD Lifecycle Fixのソースを本リポジトリで公開しています。[構成とビルド方法](docs/Source-Build.md#日本語)を参照してください。エディター・カットシーンコンバーター・ArmsAssistのソースは含めていません。
+
 リポジトリの資料は既存の[MITライセンス](LICENSE)を保持します。同梱物・第三者素材は、それぞれの同梱表記と条件に従ってください。ArmsAssistのソースは含みません。

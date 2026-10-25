@@ -1,0 +1,1610 @@
+{
+  "date": "2026-10-25",
+  "scope": [
+    "Event Loader",
+    "HUD Lifecycle Fix"
+  ],
+  "excluded": [
+    "Editor source",
+    "Cutscene Converter source",
+    "ArmsAssist source",
+    "NFRR source and dependencies (separate repository)",
+    "World2MW/W2C source (not authorized for publication)"
+  ],
+  "files": [
+    {
+      "path": "integration/AppearanceSafety.h",
+      "bytes": 1359,
+      "sourceSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
+      "publishedSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
+      "adaptation": null
+    },
+    {
+      "path": "integration/EventLoaderPaths.h",
+      "bytes": 691,
+      "sourceSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
+      "publishedSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
+      "adaptation": null
+    },
+    {
+      "path": "integration/InstalledCarType.h",
+      "bytes": 1066,
+      "sourceSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
+      "publishedSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWBarrierSpatialIndex.h",
+      "bytes": 2132,
+      "sourceSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
+      "publishedSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCheckpointRuntime.h",
+      "bytes": 3901,
+      "sourceSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
+      "publishedSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCheckpointRuntimeApi.h",
+      "bytes": 256,
+      "sourceSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
+      "publishedSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCombatContract.h",
+      "bytes": 4076,
+      "sourceSha256": "e97088840c9d12dc4d5bf7d91242670a4afb3131ff56f493b4a7c8b0d818f7c4",
+      "publishedSha256": "e97088840c9d12dc4d5bf7d91242670a4afb3131ff56f493b4a7c8b0d818f7c4",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWEventGeometryApi.h",
+      "bytes": 1054,
+      "sourceSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
+      "publishedSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWEventSceneApi.h",
+      "bytes": 326,
+      "sourceSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
+      "publishedSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWNativeSpeechPolicy.h",
+      "bytes": 560,
+      "sourceSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
+      "publishedSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWNeoObstacles.h",
+      "bytes": 562,
+      "sourceSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
+      "publishedSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWRaceBarrierPolicy.h",
+      "bytes": 1984,
+      "sourceSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
+      "publishedSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
+      "adaptation": null
+    },
+    {
+      "path": "integration/NativeFloatMath.h",
+      "bytes": 950,
+      "sourceSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
+      "publishedSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/NFSMWEventLoader.ini",
+      "bytes": 2564,
+      "sourceSha256": "5de42125a5288157263e732ac3a468a3d5b478ae741088d76667978cf30cfa56",
+      "publishedSha256": "5de42125a5288157263e732ac3a468a3d5b478ae741088d76667978cf30cfa56",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CarbonIntro.cpp",
+      "bytes": 2109,
+      "sourceSha256": "3011784406faa71115aa711e7dff5145a25a5696f53b2dafeb2beaabc2327423",
+      "publishedSha256": "3011784406faa71115aa711e7dff5145a25a5696f53b2dafeb2beaabc2327423",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CarbonIntroPolicy.h",
+      "bytes": 1667,
+      "sourceSha256": "5e3051dc8b8a03417a0a8aefd228fb340524327aad79fb153b9d15a328886863",
+      "publishedSha256": "5e3051dc8b8a03417a0a8aefd228fb340524327aad79fb153b9d15a328886863",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CarbonParticleFX.cpp",
+      "bytes": 13109,
+      "sourceSha256": "8f6c5a3f170f88c8e0a9e07ad5ddf7ee399c53e3d7fd7c2e308770f2aedfb2f2",
+      "publishedSha256": "8f6c5a3f170f88c8e0a9e07ad5ddf7ee399c53e3d7fd7c2e308770f2aedfb2f2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CarbonParticleFX.h",
+      "bytes": 884,
+      "sourceSha256": "655ee49135d91a99d474ba78726a9461047aa57531f58ec27c7ee865a2681c41",
+      "publishedSha256": "655ee49135d91a99d474ba78726a9461047aa57531f58ec27c7ee865a2681c41",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CareerOpponentTuning.inl",
+      "bytes": 6585,
+      "sourceSha256": "fccc20f455e5dcaf06d5a1a680bd36eda49973589bc9d2413fd2af8736dcbcce",
+      "publishedSha256": "fccc20f455e5dcaf06d5a1a680bd36eda49973589bc9d2413fd2af8736dcbcce",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CareerTuningPolicy.h",
+      "bytes": 1269,
+      "sourceSha256": "8f0c0f81e25535e7828ac6aa31b80850d22b4a5e049cfc8ec6e7f01b35fd3b5d",
+      "publishedSha256": "8f0c0f81e25535e7828ac6aa31b80850d22b4a5e049cfc8ec6e7f01b35fd3b5d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CheckpointDisplay.h",
+      "bytes": 8012,
+      "sourceSha256": "07c990e16221613bf3476d1b845656ae1bc2d4e751a3910ae7c554dca26a1ba5",
+      "publishedSha256": "07c990e16221613bf3476d1b845656ae1bc2d4e751a3910ae7c554dca26a1ba5",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CollectionLookupCache.h",
+      "bytes": 878,
+      "sourceSha256": "1d76173798313948c181ea9d8c61e3aa783ef34771cbe65e85ba0a524c009ff0",
+      "publishedSha256": "1d76173798313948c181ea9d8c61e3aa783ef34771cbe65e85ba0a524c009ff0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CollectionLookupCacheTests.cpp",
+      "bytes": 2013,
+      "sourceSha256": "5979150bf69cd4cb593602eeadb0b97c342e52f6d2bd0caf119f78685decd539",
+      "publishedSha256": "5979150bf69cd4cb593602eeadb0b97c342e52f6d2bd0caf119f78685decd539",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CollectionLookupCacheTests.vcxproj",
+      "bytes": 1541,
+      "sourceSha256": "8ca5c95eb06b3e05bf258c7dd83743003bd4673f7ba0d61c695d45a9a8557d64",
+      "publishedSha256": "8ca5c95eb06b3e05bf258c7dd83743003bd4673f7ba0d61c695d45a9a8557d64",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatDamageVisuals.h",
+      "bytes": 13620,
+      "sourceSha256": "b10d914bc8120d1b7b617c5c8a344e5739551422d6eba96ebc6435cc5121ebf0",
+      "publishedSha256": "b10d914bc8120d1b7b617c5c8a344e5739551422d6eba96ebc6435cc5121ebf0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatDefeatExperiment.h",
+      "bytes": 5278,
+      "sourceSha256": "f4e69d47f386016a5e8cd8568f2d65326b483659102537baba05cd896dbbbef0",
+      "publishedSha256": "f4e69d47f386016a5e8cd8568f2d65326b483659102537baba05cd896dbbbef0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatHealthPolicy.h",
+      "bytes": 2250,
+      "sourceSha256": "38b4311d64864baf9b6ac528c964f1980b330a5caddb17b80f16bc75da548572",
+      "publishedSha256": "38b4311d64864baf9b6ac528c964f1980b330a5caddb17b80f16bc75da548572",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatHealthRuntime.h",
+      "bytes": 22064,
+      "sourceSha256": "b5e3276d3e942a66cb1bb9ce20dfbb30b8b28ad15ab88abf68f398a19e5b1d25",
+      "publishedSha256": "b5e3276d3e942a66cb1bb9ce20dfbb30b8b28ad15ab88abf68f398a19e5b1d25",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatHealthRuntimeTests.cpp",
+      "bytes": 33334,
+      "sourceSha256": "3e12618de817746d60031b4f21d1c63ce58de640a1c511503cf33af404deec14",
+      "publishedSha256": "3e12618de817746d60031b4f21d1c63ce58de640a1c511503cf33af404deec14",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatHealthTests.cpp",
+      "bytes": 14220,
+      "sourceSha256": "3382209d619ba48512293e9ba624ecf4b318be979a25bc31bce7c11ee12eb67a",
+      "publishedSha256": "3382209d619ba48512293e9ba624ecf4b318be979a25bc31bce7c11ee12eb67a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatHealthTests.vcxproj",
+      "bytes": 2120,
+      "sourceSha256": "4bc55c5c9b024945812730a09f761c2e67a5fff8a8a03898eef5a40de8e61079",
+      "publishedSha256": "4bc55c5c9b024945812730a09f761c2e67a5fff8a8a03898eef5a40de8e61079",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatImpactPolicy.h",
+      "bytes": 4855,
+      "sourceSha256": "532e7a6fdb2006dded57baa18d6aaf74fde3ec437b1e20ef3094b1930b4e9216",
+      "publishedSha256": "532e7a6fdb2006dded57baa18d6aaf74fde3ec437b1e20ef3094b1930b4e9216",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatPursuitLifecycle.h",
+      "bytes": 490,
+      "sourceSha256": "b7f9bfa17243262b7c1cca6eb40c51d5b88627511b95f275074a8100927786dd",
+      "publishedSha256": "b7f9bfa17243262b7c1cca6eb40c51d5b88627511b95f275074a8100927786dd",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatRetiredMarkers.h",
+      "bytes": 6922,
+      "sourceSha256": "a4f389a81f714bc5f388f427087a40aab146a0bcc263dc4f8c89360b24815383",
+      "publishedSha256": "a4f389a81f714bc5f388f427087a40aab146a0bcc263dc4f8c89360b24815383",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CombatUiAsset.h",
+      "bytes": 1331301,
+      "sourceSha256": "ee8768a59f9bf38eb50745e8eb688b1470eab603db62cdd09ca8c2ff8a1a2404",
+      "publishedSha256": "ee8768a59f9bf38eb50745e8eb688b1470eab603db62cdd09ca8c2ff8a1a2404",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CoreTests.cpp",
+      "bytes": 11518,
+      "sourceSha256": "051742c1a6c95c7f9fa1c1846166a26a6758e71d495e982a1a557f6964b81887",
+      "publishedSha256": "051742c1a6c95c7f9fa1c1846166a26a6758e71d495e982a1a557f6964b81887",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CoreTests.vcxproj",
+      "bytes": 1468,
+      "sourceSha256": "a0e578e5ab929982a7e212750ae7faa727f8b43f203bf77ead2188ebe6f7060d",
+      "publishedSha256": "a0e578e5ab929982a7e212750ae7faa727f8b43f203bf77ead2188ebe6f7060d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/DifficultyFieldTests.cpp",
+      "bytes": 14091,
+      "sourceSha256": "25bff2402ad29c91365613a57747ec6b3abb6ed9d6c54126367c11a07366b658",
+      "publishedSha256": "25bff2402ad29c91365613a57747ec6b3abb6ed9d6c54126367c11a07366b658",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/DifficultyFieldTests.vcxproj",
+      "bytes": 1340,
+      "sourceSha256": "04648f52848bbc7f51c311c5db49236d694c16a11457e1b7fbd49b3fee73613f",
+      "publishedSha256": "04648f52848bbc7f51c311c5db49236d694c16a11457e1b7fbd49b3fee73613f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/DifficultyPolicy.h",
+      "bytes": 2025,
+      "sourceSha256": "8c07d863e402a61f8497e707165dc12f23a2c43db09a58d10d1fda45e0aaf22b",
+      "publishedSha256": "8c07d863e402a61f8497e707165dc12f23a2c43db09a58d10d1fda45e0aaf22b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/DifficultySettings.h",
+      "bytes": 1298,
+      "sourceSha256": "ff3c7d29aad52b7c90cb59b5370649ac5655816bae2e444da2b141745d7f571d",
+      "publishedSha256": "ff3c7d29aad52b7c90cb59b5370649ac5655816bae2e444da2b141745d7f571d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventAudioExtension.h",
+      "bytes": 3396,
+      "sourceSha256": "14c0008e011bd7ca3273b1f5b38b0550bfacdcee3bccb54c89560c8c67e5b44f",
+      "publishedSha256": "14c0008e011bd7ca3273b1f5b38b0550bfacdcee3bccb54c89560c8c67e5b44f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventAudioPolicy.h",
+      "bytes": 440,
+      "sourceSha256": "5132d1d690847237ad7c4699ee3b63e2d354e51b570a0e024295cadbaa524dea",
+      "publishedSha256": "5132d1d690847237ad7c4699ee3b63e2d354e51b570a0e024295cadbaa524dea",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventBarriers.cpp",
+      "bytes": 20977,
+      "sourceSha256": "d87f1563e2244af19903beb6acfa817203ffb0f4150ec2efa1116690947e3016",
+      "publishedSha256": "d87f1563e2244af19903beb6acfa817203ffb0f4150ec2efa1116690947e3016",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventBarriers.h",
+      "bytes": 315,
+      "sourceSha256": "d115d1337b69e129ccb431ba2a68def13ce5bbfe8e55352fd46607051e27fac5",
+      "publishedSha256": "d115d1337b69e129ccb431ba2a68def13ce5bbfe8e55352fd46607051e27fac5",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventCore.h",
+      "bytes": 17610,
+      "sourceSha256": "df84187843b4bf0f1260703416e343cfd791b5addb5d5954fd6b24cd3bd541a0",
+      "publishedSha256": "df84187843b4bf0f1260703416e343cfd791b5addb5d5954fd6b24cd3bd541a0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventLeaderboard.h",
+      "bytes": 4268,
+      "sourceSha256": "1c2975fcc00d0900b49df51e49c30b6d538894a358c6b702649c6e51e1aba2db",
+      "publishedSha256": "1c2975fcc00d0900b49df51e49c30b6d538894a358c6b702649c6e51e1aba2db",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventMaps.h",
+      "bytes": 10834,
+      "sourceSha256": "d36670c85cffe80ff96e87ebf57cb697a264509b7a73bf44aaffb2e8eeccb6c4",
+      "publishedSha256": "d36670c85cffe80ff96e87ebf57cb697a264509b7a73bf44aaffb2e8eeccb6c4",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventPresentation.h",
+      "bytes": 8538,
+      "sourceSha256": "dcb37b7a9912e196daf8317b064dc3ee390cffb8bab28067b99c1eee3e803a68",
+      "publishedSha256": "dcb37b7a9912e196daf8317b064dc3ee390cffb8bab28067b99c1eee3e803a68",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventPresentationPolicy.h",
+      "bytes": 1040,
+      "sourceSha256": "296971bf6844e01f7ccb44ea07d04631cef83653aa3845134f2f2d494d203595",
+      "publishedSha256": "296971bf6844e01f7ccb44ea07d04631cef83653aa3845134f2f2d494d203595",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventPreviewBounds.h",
+      "bytes": 654,
+      "sourceSha256": "ff3de61130d69d7793d0ac226ac99a5396a1936b6889d177afe1a04545edf51d",
+      "publishedSha256": "ff3de61130d69d7793d0ac226ac99a5396a1936b6889d177afe1a04545edf51d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventRacePolicies.h",
+      "bytes": 12699,
+      "sourceSha256": "394381ff874d0b246fd0279eca2a4a0be87b1e09d4044ff0f5d1c0cbd12a3bbf",
+      "publishedSha256": "394381ff874d0b246fd0279eca2a4a0be87b1e09d4044ff0f5d1c0cbd12a3bbf",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventRaceProgress.h",
+      "bytes": 9944,
+      "sourceSha256": "a60e699ef352b124f825d4b255ad5326806ab5b2e3e45feadddf4c29953b10ea",
+      "publishedSha256": "a60e699ef352b124f825d4b255ad5326806ab5b2e3e45feadddf4c29953b10ea",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventResourceDiagnostics.h",
+      "bytes": 3617,
+      "sourceSha256": "0727070c1a2612c35de0d375066728d69d2e2e4b07f3b05baef8b8e9732de455",
+      "publishedSha256": "0727070c1a2612c35de0d375066728d69d2e2e4b07f3b05baef8b8e9732de455",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventSpeedTraps.h",
+      "bytes": 4020,
+      "sourceSha256": "ea205ce4cfb5ed4c6a97435e2c0eebba3c1d1efe3a42e895a417f81adeb3edd7",
+      "publishedSha256": "ea205ce4cfb5ed4c6a97435e2c0eebba3c1d1efe3a42e895a417f81adeb3edd7",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/EventTitles.h",
+      "bytes": 5952,
+      "sourceSha256": "d8867949b553f89682d71303f13751b8050abfb19d6f579db8884813346c5d95",
+      "publishedSha256": "d8867949b553f89682d71303f13751b8050abfb19d6f579db8884813346c5d95",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/ExpandedLeaderboard.h",
+      "bytes": 12375,
+      "sourceSha256": "f59e97a6a604dc400b975a069aef7fe472ffe78db309865a647c5cc5415c901d",
+      "publishedSha256": "f59e97a6a604dc400b975a069aef7fe472ffe78db309865a647c5cc5415c901d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletBackupPolicy.h",
+      "bytes": 1576,
+      "sourceSha256": "3a9d21d6d7ac97c7094536724b964e7f8a725df1fb40b646cca63cb576a82770",
+      "publishedSha256": "3a9d21d6d7ac97c7094536724b964e7f8a725df1fb40b646cca63cb576a82770",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletBootstrapPolicy.h",
+      "bytes": 463,
+      "sourceSha256": "cd8ded1200e2c8ffd49ff25bb80e83baa0e55f67de071a1d288f93cd7a5d363e",
+      "publishedSha256": "cd8ded1200e2c8ffd49ff25bb80e83baa0e55f67de071a1d288f93cd7a5d363e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletCombatPolicy.h",
+      "bytes": 1719,
+      "sourceSha256": "75e703df83449e44ee93e5fb10224ffe96cc76808828a4d4dc536af1d64b8ece",
+      "publishedSha256": "75e703df83449e44ee93e5fb10224ffe96cc76808828a4d4dc536af1d64b8ece",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletHud.h",
+      "bytes": 6656,
+      "sourceSha256": "1a7128082e788e4f3d15df29fc5e64ccd6dcb70ee75b21f62b07c378d375aa8c",
+      "publishedSha256": "1a7128082e788e4f3d15df29fc5e64ccd6dcb70ee75b21f62b07c378d375aa8c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletPursuit.h",
+      "bytes": 6078,
+      "sourceSha256": "fa9f9ef3bfaa9aa6572f408b751fd81114083e94dc00a8ab45fde74b665980a2",
+      "publishedSha256": "fa9f9ef3bfaa9aa6572f408b751fd81114083e94dc00a8ab45fde74b665980a2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletRuntime.h",
+      "bytes": 36621,
+      "sourceSha256": "93953ab965d572b6d66a3ab3e3a109e08e1ef7a40616de49c83a1e51de749a55",
+      "publishedSha256": "93953ab965d572b6d66a3ab3e3a109e08e1ef7a40616de49c83a1e51de749a55",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletUiAsset.h",
+      "bytes": 1331234,
+      "sourceSha256": "392f8766f1edf41d87627a43aa1d4e51fcb77d4b7a2420560fbfcd31c3121958",
+      "publishedSha256": "392f8766f1edf41d87627a43aa1d4e51fcb77d4b7a2420560fbfcd31c3121958",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GauntletVehiclePolicy.h",
+      "bytes": 461,
+      "sourceSha256": "b783bfbea8e5cda1310afc39c2907880d53a428c726a42a68a4a6e6413609807",
+      "publishedSha256": "b783bfbea8e5cda1310afc39c2907880d53a428c726a42a68a4a6e6413609807",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GeometryApiTests.cpp",
+      "bytes": 10779,
+      "sourceSha256": "a5e8bcaec1b8bf679be33db237c5f7973eac996628591d065cda294a47139676",
+      "publishedSha256": "a5e8bcaec1b8bf679be33db237c5f7973eac996628591d065cda294a47139676",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GeometryApiTests.vcxproj",
+      "bytes": 1317,
+      "sourceSha256": "5fd1ecfb71f1a24085f2b44d738c492a82cdc7840a27f93349ada05b54513d9b",
+      "publishedSha256": "5fd1ecfb71f1a24085f2b44d738c492a82cdc7840a27f93349ada05b54513d9b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GeometryQueries.h",
+      "bytes": 4409,
+      "sourceSha256": "edbf16fcc4bed100de285d7e9e8ac44488b933f66ae459e30d181660543779f2",
+      "publishedSha256": "edbf16fcc4bed100de285d7e9e8ac44488b933f66ae459e30d181660543779f2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GridLaunchPolicy.h",
+      "bytes": 3274,
+      "sourceSha256": "32122b5256bc344a5ab07378633a9dda45e6994715a7d1b779d57f2c30304186",
+      "publishedSha256": "32122b5256bc344a5ab07378633a9dda45e6994715a7d1b779d57f2c30304186",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GridPolicy.h",
+      "bytes": 1749,
+      "sourceSha256": "a1a222d5ef59bb0a804a90312df19e6eb334ce04c892a1428e58f6aee1f4a4ba",
+      "publishedSha256": "a1a222d5ef59bb0a804a90312df19e6eb334ce04c892a1428e58f6aee1f4a4ba",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/GridSupport.h",
+      "bytes": 1535,
+      "sourceSha256": "772d31855100ea483239466fe1fa7b2dd4e3afc5cf06636492dc383225e426df",
+      "publishedSha256": "772d31855100ea483239466fe1fa7b2dd4e3afc5cf06636492dc383225e426df",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitController.h",
+      "bytes": 27445,
+      "sourceSha256": "08168428adb944775ba0acd0bd3f81d28542a2a9c1ba3efa0452ab9463fc3d9a",
+      "publishedSha256": "08168428adb944775ba0acd0bd3f81d28542a2a9c1ba3efa0452ab9463fc3d9a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitFinish.h",
+      "bytes": 9132,
+      "sourceSha256": "6e9b648424c6f94b534a11ce89fa3da6a60dfd2b964c7b450ee5602f0c67c3ed",
+      "publishedSha256": "6e9b648424c6f94b534a11ce89fa3da6a60dfd2b964c7b450ee5602f0c67c3ed",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitOwnership.inl",
+      "bytes": 18137,
+      "sourceSha256": "9df2e13dd785905a908fbd13477be87ac22f1e8455043c3c3ce26df7f017a8d6",
+      "publishedSha256": "9df2e13dd785905a908fbd13477be87ac22f1e8455043c3c3ce26df7f017a8d6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitPolicy.h",
+      "bytes": 3486,
+      "sourceSha256": "58429bc78ef7aaef5735ef3ce92ddfede6717ea5dccde3adcaee878ef866d873",
+      "publishedSha256": "58429bc78ef7aaef5735ef3ce92ddfede6717ea5dccde3adcaee878ef866d873",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitRadar.h",
+      "bytes": 5609,
+      "sourceSha256": "f97fbd4f3fe7cc4093e80dc877d444f1a1b850bc6d2a528992ebf689fcefa38b",
+      "publishedSha256": "f97fbd4f3fe7cc4093e80dc877d444f1a1b850bc6d2a528992ebf689fcefa38b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitRegeneration.h",
+      "bytes": 2097,
+      "sourceSha256": "bd2d98321f28726ff23378e4ba8e88c076e4c8577acd87a0b70fa307f298038a",
+      "publishedSha256": "bd2d98321f28726ff23378e4ba8e88c076e4c8577acd87a0b70fa307f298038a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitRoadblock.h",
+      "bytes": 1666,
+      "sourceSha256": "0c4ca7be69b211fb114986912debfbd545226ccbded8a2e3bcd97a9a5aa73332",
+      "publishedSha256": "0c4ca7be69b211fb114986912debfbd545226ccbded8a2e3bcd97a9a5aa73332",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitRuntime.h",
+      "bytes": 5250,
+      "sourceSha256": "218a7a40c22c0e3cc2c5a53712419d8d86ea8603143c891bdf033a7396ab78ba",
+      "publishedSha256": "218a7a40c22c0e3cc2c5a53712419d8d86ea8603143c891bdf033a7396ab78ba",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/HotPursuitUiAsset.h",
+      "bytes": 1331237,
+      "sourceSha256": "9cd0079ac96019b4e806e23b565676f6abd7b3f80b3243800c0cfd6fb2f4621d",
+      "publishedSha256": "9cd0079ac96019b4e806e23b565676f6abd7b3f80b3243800c0cfd6fb2f4621d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/InstalledCarTypeTests.cpp",
+      "bytes": 3917,
+      "sourceSha256": "6ba1de2e02d9598de72b5649290970ffc7cf7eeab861fa43d100c4c9b7fbb0e9",
+      "publishedSha256": "6ba1de2e02d9598de72b5649290970ffc7cf7eeab861fa43d100c4c9b7fbb0e9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/InstalledCarTypeTests.vcxproj",
+      "bytes": 1679,
+      "sourceSha256": "253f62b2d507d8c2ae8793b9f9f20fd6805ed54bf5d891e0fbd455d91b8f5037",
+      "publishedSha256": "253f62b2d507d8c2ae8793b9f9f20fd6805ed54bf5d891e0fbd455d91b8f5037",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/MapResourceIdentity.h",
+      "bytes": 432,
+      "sourceSha256": "93e22ee1f2e0d80a8961b9bc175746b27df3ca8c22b3225f4a159aad32b9fdc2",
+      "publishedSha256": "93e22ee1f2e0d80a8961b9bc175746b27df3ca8c22b3225f4a159aad32b9fdc2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/ModUpdateDialog.h",
+      "bytes": 5362,
+      "sourceSha256": "25aa311119b1f85e91860507ab8fc2924ebb8b8fc7aa087ba868644f08aaeb51",
+      "publishedSha256": "25aa311119b1f85e91860507ab8fc2924ebb8b8fc7aa087ba868644f08aaeb51",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeCashValue.h",
+      "bytes": 756,
+      "sourceSha256": "d64b7a7a617ba07849d9d016687dffc70a40ac816427aac3fef2e294720386c9",
+      "publishedSha256": "d64b7a7a617ba07849d9d016687dffc70a40ac816427aac3fef2e294720386c9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeCheckpointExtension.cpp",
+      "bytes": 785,
+      "sourceSha256": "d1bd43f9b2316bd79096d76e96c933323f9cf02d8822b7d622877410cadd0e0e",
+      "publishedSha256": "d1bd43f9b2316bd79096d76e96c933323f9cf02d8822b7d622877410cadd0e0e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeCheckpointExtension.h",
+      "bytes": 216,
+      "sourceSha256": "b49958466393a2f71ce1e196be92cf10900dd692d540546db73e034aa154109b",
+      "publishedSha256": "b49958466393a2f71ce1e196be92cf10900dd692d540546db73e034aa154109b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeCollisionBuild.h",
+      "bytes": 10366,
+      "sourceSha256": "93a7664d99eafcb13e607d9a6d9322c82162cd80da10bcbe153634a8edf31322",
+      "publishedSha256": "93a7664d99eafcb13e607d9a6d9322c82162cd80da10bcbe153634a8edf31322",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeGeometry.cpp",
+      "bytes": 10173,
+      "sourceSha256": "bce1ff10173c4c6969ecdca296a6d686dcb38269775b323a5d7e324e2d65fdb5",
+      "publishedSha256": "bce1ff10173c4c6969ecdca296a6d686dcb38269775b323a5d7e324e2d65fdb5",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeGoalEvidence.h",
+      "bytes": 14323,
+      "sourceSha256": "234dfa735198ec4b92f6ea88131d00b9ddbab89d59c6e7fb49514162e4611824",
+      "publishedSha256": "234dfa735198ec4b92f6ea88131d00b9ddbab89d59c6e7fb49514162e4611824",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeGroupPolicy.h",
+      "bytes": 431,
+      "sourceSha256": "45623db0ea2ea3961e11d7aa5fcf2ee227341295733ea856ba67f5c9ec91664c",
+      "publishedSha256": "45623db0ea2ea3961e11d7aa5fcf2ee227341295733ea856ba67f5c9ec91664c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeMaterialAdapters.h",
+      "bytes": 897,
+      "sourceSha256": "c5e170991e0f9152f8b44dbac608f1a9008fdef94c8746c90695e168f320bbb5",
+      "publishedSha256": "c5e170991e0f9152f8b44dbac608f1a9008fdef94c8746c90695e168f320bbb5",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeMaterialRuntime.h",
+      "bytes": 2642,
+      "sourceSha256": "1eb9ea8dbb0e2a19000f9422d270d55cbde7fb32b56eec91b7242eec751b1d79",
+      "publishedSha256": "1eb9ea8dbb0e2a19000f9422d270d55cbde7fb32b56eec91b7242eec751b1d79",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativePerformanceFixture.h",
+      "bytes": 2220,
+      "sourceSha256": "adad2f42353bf34b8c5102270abdba78dda1919da2b8a4ed0205b536831964c9",
+      "publishedSha256": "adad2f42353bf34b8c5102270abdba78dda1919da2b8a4ed0205b536831964c9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeRuntimeDiagnostics.h",
+      "bytes": 7272,
+      "sourceSha256": "346ca0e3db437f1d69312de0db33400dc7381e6098949d9c68881a20cabb4034",
+      "publishedSha256": "346ca0e3db437f1d69312de0db33400dc7381e6098949d9c68881a20cabb4034",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeSaveFilter.h",
+      "bytes": 903,
+      "sourceSha256": "cc0b16a008d9a31a87e2b0c946efc6e89337eaf1e97cd18b0d2e83603ca5255e",
+      "publishedSha256": "cc0b16a008d9a31a87e2b0c946efc6e89337eaf1e97cd18b0d2e83603ca5255e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeSaveFilterTests.cpp",
+      "bytes": 4241,
+      "sourceSha256": "52153dabaa488414ee97fdc6a198a858810e4a269915e24023ad05bea6a06029",
+      "publishedSha256": "52153dabaa488414ee97fdc6a198a858810e4a269915e24023ad05bea6a06029",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeSaveFilterTests.vcxproj",
+      "bytes": 1485,
+      "sourceSha256": "a576a0b7cc0f7ad9db8e7088d6c69c9ee69c3b9724057e9a99ab0d3b91dd3d5d",
+      "publishedSha256": "a576a0b7cc0f7ad9db8e7088d6c69c9ee69c3b9724057e9a99ab0d3b91dd3d5d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeSaveIsolation.h",
+      "bytes": 6767,
+      "sourceSha256": "5593447f5ba87904417fe87cd07017822d19bd3553c5af5c9d1c6ed4ec1c4952",
+      "publishedSha256": "5593447f5ba87904417fe87cd07017822d19bd3553c5af5c9d1c6ed4ec1c4952",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeSceneMaterial.h",
+      "bytes": 2977,
+      "sourceSha256": "e94ec3583194be8978f944e0c74dae45ee6e3824eee91b4750f7edd291089a0a",
+      "publishedSha256": "03d998fe3e514d4cdc1424f1e6e9945f91b4eb9555099d7929879d0ee6ee2cdb",
+      "adaptation": "Replace private D3DX header include path with standard include resolved through D3DXRoot; implementation unchanged."
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeWallSolids.h",
+      "bytes": 5263,
+      "sourceSha256": "266a8f5872e5a1cadd7caa7c9d530e73e7997a8dcebe34c7e9a5108947504eed",
+      "publishedSha256": "266a8f5872e5a1cadd7caa7c9d530e73e7997a8dcebe34c7e9a5108947504eed",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoActuators.inl",
+      "bytes": 38547,
+      "sourceSha256": "6279ca715a404a23b8522ff697791811a488e1792f1dd7c067d5a9838bb9f32d",
+      "publishedSha256": "6279ca715a404a23b8522ff697791811a488e1792f1dd7c067d5a9838bb9f32d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoAirborneRoad.h",
+      "bytes": 2953,
+      "sourceSha256": "c90e05658d846a4e750c49bf522b34b9cdd9c0bcd0c0d2846c6ba79a4283c440",
+      "publishedSha256": "c90e05658d846a4e750c49bf522b34b9cdd9c0bcd0c0d2846c6ba79a4283c440",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoAsyncWorker.h",
+      "bytes": 5901,
+      "sourceSha256": "52377ebedbd8b01c8ce462fdc578756994aa37b4448a3f0356daa8a280ea126d",
+      "publishedSha256": "52377ebedbd8b01c8ce462fdc578756994aa37b4448a3f0356daa8a280ea126d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoAsyncWorkerTests.cpp",
+      "bytes": 9050,
+      "sourceSha256": "bf5d0782bcbe416f00841932f152c0129ea347c05299852327f5d33910f566c6",
+      "publishedSha256": "bf5d0782bcbe416f00841932f152c0129ea347c05299852327f5d33910f566c6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBoundaryTests.cpp",
+      "bytes": 3458,
+      "sourceSha256": "786f3db73cbf8597ab135ee1eb2feb90e2ebaaf4d41193b5ca8024507172fded",
+      "publishedSha256": "786f3db73cbf8597ab135ee1eb2feb90e2ebaaf4d41193b5ca8024507172fded",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBoundaryTests.vcxproj",
+      "bytes": 1388,
+      "sourceSha256": "854410d27ee9cf6654f30075773f10c239116dae8c0c19a16b322f83d99c4909",
+      "publishedSha256": "854410d27ee9cf6654f30075773f10c239116dae8c0c19a16b322f83d99c4909",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBranchRecovery.h",
+      "bytes": 1405,
+      "sourceSha256": "41388dbc9f50492b16defcd5cdcdd81e30fb6a4a73be166848d84dd1c0b14342",
+      "publishedSha256": "41388dbc9f50492b16defcd5cdcdd81e30fb6a4a73be166848d84dd1c0b14342",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBranchRejoin.h",
+      "bytes": 1056,
+      "sourceSha256": "a242894b46a947c60629bfbdc44e29038cfc4462bda4aeff4b1a100b6dd16c5b",
+      "publishedSha256": "a242894b46a947c60629bfbdc44e29038cfc4462bda4aeff4b1a100b6dd16c5b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBridgeApproach.h",
+      "bytes": 3104,
+      "sourceSha256": "60d5bd9474a9d3705eb384528f3bea3f722c6ecdd2594f46074bd6aef5c14a31",
+      "publishedSha256": "60d5bd9474a9d3705eb384528f3bea3f722c6ecdd2594f46074bd6aef5c14a31",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoBridgeFlight.h",
+      "bytes": 19857,
+      "sourceSha256": "1be1fea62eb63fc05d5a6b277fae03563d29174f23e4fa0513d12f06b9494dfc",
+      "publishedSha256": "1be1fea62eb63fc05d5a6b277fae03563d29174f23e4fa0513d12f06b9494dfc",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoCorridorTests.cpp",
+      "bytes": 9538,
+      "sourceSha256": "19ff49a9578b26edbd133370715cb690aaf151a6c3d091e3412441e3ab2a706b",
+      "publishedSha256": "19ff49a9578b26edbd133370715cb690aaf151a6c3d091e3412441e3ab2a706b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoCorridorTests.vcxproj",
+      "bytes": 1168,
+      "sourceSha256": "576d0905e1e12eeeb5285077fab3090d4baf8a47a70442e87859b1a91ba21143",
+      "publishedSha256": "576d0905e1e12eeeb5285077fab3090d4baf8a47a70442e87859b1a91ba21143",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoCourseDirection.h",
+      "bytes": 1055,
+      "sourceSha256": "b0daa012fc3a5238bdd936f1b0f91518fe76f2a6a73e3f5abff8d2b876b5f106",
+      "publishedSha256": "b0daa012fc3a5238bdd936f1b0f91518fe76f2a6a73e3f5abff8d2b876b5f106",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoCourseReaders.inl",
+      "bytes": 8649,
+      "sourceSha256": "f88179a2bb7b79a97e70d334a67edcd13d5c26dabaf99ad13cb3ea9e4f7338af",
+      "publishedSha256": "f88179a2bb7b79a97e70d334a67edcd13d5c26dabaf99ad13cb3ea9e4f7338af",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDepartureBounds.h",
+      "bytes": 2830,
+      "sourceSha256": "7f63e02296b193a254dfa4f2068d0f23cef2b9fd175b8122696cade8fe1839a2",
+      "publishedSha256": "7f63e02296b193a254dfa4f2068d0f23cef2b9fd175b8122696cade8fe1839a2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDepartureLearning.h",
+      "bytes": 4139,
+      "sourceSha256": "d5be26784ce0cdcec569e480c5062937260d699dd80eca950a489e7f649d042e",
+      "publishedSha256": "d5be26784ce0cdcec569e480c5062937260d699dd80eca950a489e7f649d042e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDeparturePrediction.h",
+      "bytes": 1847,
+      "sourceSha256": "573a08e31dfde5432e711a00e10d223415c01f2a032ec1eaa9976ae8200fb92b",
+      "publishedSha256": "573a08e31dfde5432e711a00e10d223415c01f2a032ec1eaa9976ae8200fb92b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDownstep.h",
+      "bytes": 3050,
+      "sourceSha256": "3cd41b14f54ed75f881459491d0cac831b57d48ce93497b37589729e97964f66",
+      "publishedSha256": "3cd41b14f54ed75f881459491d0cac831b57d48ce93497b37589729e97964f66",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDownstepArc.h",
+      "bytes": 8601,
+      "sourceSha256": "c864d969dacad0ba88c00fbf23643356775b6b5682fcd0f41916b02827c34cb6",
+      "publishedSha256": "c864d969dacad0ba88c00fbf23643356775b6b5682fcd0f41916b02827c34cb6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDownstepClearance.h",
+      "bytes": 8053,
+      "sourceSha256": "b704594359b1b59802018bd853462344d2d82f7391e0809ab5bcc0af29717929",
+      "publishedSha256": "b704594359b1b59802018bd853462344d2d82f7391e0809ab5bcc0af29717929",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDriver.cpp",
+      "bytes": 6424,
+      "sourceSha256": "0a046d174961df8227fb75fb7b31af329f212ad8965f5f1af6f98c8845775de0",
+      "publishedSha256": "0a046d174961df8227fb75fb7b31af329f212ad8965f5f1af6f98c8845775de0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoDriverBridge.h",
+      "bytes": 1584,
+      "sourceSha256": "56c761d40b8e7471e01706558acf8f79b9d858bad64b8fcc27b4a21f6fa35181",
+      "publishedSha256": "56c761d40b8e7471e01706558acf8f79b9d858bad64b8fcc27b4a21f6fa35181",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoExecutionPreference.h",
+      "bytes": 892,
+      "sourceSha256": "449c89468b105b7018e3f6a1d411c11d36fa2ed953414fe35ffadd69f92dbff0",
+      "publishedSha256": "449c89468b105b7018e3f6a1d411c11d36fa2ed953414fe35ffadd69f92dbff0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoExecutionReserve.h",
+      "bytes": 362,
+      "sourceSha256": "16139f79a97860f5670442affd17179cbbe92c76133cb486576812df4e5439f6",
+      "publishedSha256": "16139f79a97860f5670442affd17179cbbe92c76133cb486576812df4e5439f6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoFlightLearning.h",
+      "bytes": 2852,
+      "sourceSha256": "478b769e5d7c3edc27605e60e6fe31cb697416f1e2833f639439cf8eabe052d1",
+      "publishedSha256": "478b769e5d7c3edc27605e60e6fe31cb697416f1e2833f639439cf8eabe052d1",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoFlightReplay.cpp",
+      "bytes": 3838,
+      "sourceSha256": "665001f417b2d5b6d95b07d6c52aad72b5ef233f11acfce09638c5875642313c",
+      "publishedSha256": "665001f417b2d5b6d95b07d6c52aad72b5ef233f11acfce09638c5875642313c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoFlightReplay.vcxproj",
+      "bytes": 1324,
+      "sourceSha256": "002f4dd27a90188fc067ad546bd6429c60896170e7b4ae4f9e34400e15711628",
+      "publishedSha256": "002f4dd27a90188fc067ad546bd6429c60896170e7b4ae4f9e34400e15711628",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoGateApproach.h",
+      "bytes": 989,
+      "sourceSha256": "c8a66868f509d1e24ed7a40abf9b4d48a811e923e31a90516ee611c246e50074",
+      "publishedSha256": "c8a66868f509d1e24ed7a40abf9b4d48a811e923e31a90516ee611c246e50074",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoGeometrySnapshot.h",
+      "bytes": 5374,
+      "sourceSha256": "ef54740fa949dceee27f858c313b6e026bddf3b613d64ea35f90c2ca12af0836",
+      "publishedSha256": "ef54740fa949dceee27f858c313b6e026bddf3b613d64ea35f90c2ca12af0836",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoGeometrySnapshotTests.cpp",
+      "bytes": 4112,
+      "sourceSha256": "25185ef31bbf4187a832b9695789e6138e011a582bbef2f43e7998b71a55cbf3",
+      "publishedSha256": "25185ef31bbf4187a832b9695789e6138e011a582bbef2f43e7998b71a55cbf3",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoGroundTests.cpp",
+      "bytes": 5471,
+      "sourceSha256": "3ca8600ab636fb9dc65fbfff7acbba6126c0141fc616e53d0603d77c5603a673",
+      "publishedSha256": "3ca8600ab636fb9dc65fbfff7acbba6126c0141fc616e53d0603d77c5603a673",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoGroundTests.vcxproj",
+      "bytes": 1321,
+      "sourceSha256": "4d61ee35b995247001e67ea2f8c0fa407e4ce5c0eb1304aeb1881715e801d25b",
+      "publishedSha256": "4d61ee35b995247001e67ea2f8c0fa407e4ce5c0eb1304aeb1881715e801d25b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoLandingTrace.inl",
+      "bytes": 4949,
+      "sourceSha256": "9439afc6e34b557c40ba98a0a4cbe5f5653327a82ca7b89c29ca147416b315bc",
+      "publishedSha256": "9439afc6e34b557c40ba98a0a4cbe5f5653327a82ca7b89c29ca147416b315bc",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoLaneProgress.h",
+      "bytes": 969,
+      "sourceSha256": "c8c651d0632e8273b98e74c1b633ad69e980abc06f36e55e605d19a62c1e2250",
+      "publishedSha256": "c8c651d0632e8273b98e74c1b633ad69e980abc06f36e55e605d19a62c1e2250",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoLiveObstacles.h",
+      "bytes": 1581,
+      "sourceSha256": "7884289b3a60153b22844849e792e6cef782f12e42c1cd04dbc0b93c7f187ee5",
+      "publishedSha256": "7884289b3a60153b22844849e792e6cef782f12e42c1cd04dbc0b93c7f187ee5",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoManeuverPlannerOwned.h",
+      "bytes": 9647,
+      "sourceSha256": "a8b012ac0f7a75d1b0ed97f821a6af82d73b28f73dfafedf8e2e0277fc99d9d7",
+      "publishedSha256": "a8b012ac0f7a75d1b0ed97f821a6af82d73b28f73dfafedf8e2e0277fc99d9d7",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoNativeGravity.h",
+      "bytes": 3373,
+      "sourceSha256": "ab150aa6c8b4e9ca20aef248f568f743adaf69c19c10726529e9b6e0c86cf85c",
+      "publishedSha256": "ab150aa6c8b4e9ca20aef248f568f743adaf69c19c10726529e9b6e0c86cf85c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoNativeGroundFallback.inl",
+      "bytes": 7837,
+      "sourceSha256": "0fb44a51aa04e62e70e422457ee706e3579ff24cae5112d1e323133dbb61df80",
+      "publishedSha256": "0fb44a51aa04e62e70e422457ee706e3579ff24cae5112d1e323133dbb61df80",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoObservedPlacement.h",
+      "bytes": 940,
+      "sourceSha256": "64c1c20a4e57d84c1411530c9dee9ad7ce4955fc1b1f165532940c030a072f4f",
+      "publishedSha256": "64c1c20a4e57d84c1411530c9dee9ad7ce4955fc1b1f165532940c030a072f4f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoObstacleFile.h",
+      "bytes": 1170,
+      "sourceSha256": "1e03d6d1851ae71d254b143b1cb2d78e41f88e7f14b82eb76df5170ee8e30bc9",
+      "publishedSha256": "1e03d6d1851ae71d254b143b1cb2d78e41f88e7f14b82eb76df5170ee8e30bc9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoOwnership.inl",
+      "bytes": 16107,
+      "sourceSha256": "6da4f9704a81a9117c01c64d8a2d0886f8b82a744a91050500ae5a988ba446df",
+      "publishedSha256": "6da4f9704a81a9117c01c64d8a2d0886f8b82a744a91050500ae5a988ba446df",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoPlanningAsync.inl",
+      "bytes": 7499,
+      "sourceSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
+      "publishedSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoPlanShift.h",
+      "bytes": 980,
+      "sourceSha256": "16478d53a06b985137410d1e0ea07c2e39585ccc8104301074801deabf1ea166",
+      "publishedSha256": "16478d53a06b985137410d1e0ea07c2e39585ccc8104301074801deabf1ea166",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoPositionWatch.h",
+      "bytes": 1106,
+      "sourceSha256": "c6887844a995474bfd2557e12f406799aa4c16ca7335e592ee2a6d04b14e5d71",
+      "publishedSha256": "c6887844a995474bfd2557e12f406799aa4c16ca7335e592ee2a6d04b14e5d71",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoProvider.cpp",
+      "bytes": 14389,
+      "sourceSha256": "0bd4e2435c5e1be05586b4836176e8ae25784630dd0364cbaa66509423f90bbf",
+      "publishedSha256": "0bd4e2435c5e1be05586b4836176e8ae25784630dd0364cbaa66509423f90bbf",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoProviderBridge.h",
+      "bytes": 1266,
+      "sourceSha256": "7b931806c8c67a0dbdb12e148591291f559b59cff0f70a1d06db81d99a620806",
+      "publishedSha256": "7b931806c8c67a0dbdb12e148591291f559b59cff0f70a1d06db81d99a620806",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoProviderOwned.inl",
+      "bytes": 72413,
+      "sourceSha256": "b374aba79f65ad487c02f635984a725cb65836a0f82e930a3e4e70ab0d99d360",
+      "publishedSha256": "b374aba79f65ad487c02f635984a725cb65836a0f82e930a3e4e70ab0d99d360",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoRaceRoutePolicy.h",
+      "bytes": 2602,
+      "sourceSha256": "282361e6e1d88d71ccd17e834819163572bd6f39c970c83f51640278cb70aec6",
+      "publishedSha256": "282361e6e1d88d71ccd17e834819163572bd6f39c970c83f51640278cb70aec6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoRecoveryObservation.h",
+      "bytes": 744,
+      "sourceSha256": "c75b8a75275e46531b9b17c1f4b8b559e7c12309ab87e403ed0ffad14662a5ed",
+      "publishedSha256": "c75b8a75275e46531b9b17c1f4b8b559e7c12309ab87e403ed0ffad14662a5ed",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoRecoveryPrefix.h",
+      "bytes": 1439,
+      "sourceSha256": "e9dc875332621baa515851445dd2512c1239b609ef2fffb9cef1dbcd44487a8c",
+      "publishedSha256": "e9dc875332621baa515851445dd2512c1239b609ef2fffb9cef1dbcd44487a8c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoResetObservation.h",
+      "bytes": 3848,
+      "sourceSha256": "0e3b995779fc94e9d8c90422befd158e3fa1d49653db650a66f0fe153cfe8f95",
+      "publishedSha256": "0e3b995779fc94e9d8c90422befd158e3fa1d49653db650a66f0fe153cfe8f95",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoRespawnOwned.inl",
+      "bytes": 15002,
+      "sourceSha256": "811e51eb1629570147f863f28af64d75b0c9a8b4c94a7f6dc3631bc8424fec96",
+      "publishedSha256": "811e51eb1629570147f863f28af64d75b0c9a8b4c94a7f6dc3631bc8424fec96",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoSimulationStep.h",
+      "bytes": 348,
+      "sourceSha256": "f79eb86a1c53525322d5b99f8ee55169b68a3f9ac452d259f0f52f612b20b501",
+      "publishedSha256": "f79eb86a1c53525322d5b99f8ee55169b68a3f9ac452d259f0f52f612b20b501",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoSnapshotGeometryApi.h",
+      "bytes": 2933,
+      "sourceSha256": "5eb66fb2d14bcad7e2d94a9f22466e2f223ea6098883ff12e875c6f3b764598b",
+      "publishedSha256": "5eb66fb2d14bcad7e2d94a9f22466e2f223ea6098883ff12e875c6f3b764598b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoSpeedTests.cpp",
+      "bytes": 23860,
+      "sourceSha256": "8b2fdb0865443f1062ab856169034c97c0998ef49ef3f8a0bd08aa38483a4f64",
+      "publishedSha256": "8b2fdb0865443f1062ab856169034c97c0998ef49ef3f8a0bd08aa38483a4f64",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoSpeedTests.vcxproj",
+      "bytes": 1313,
+      "sourceSha256": "98980973b3ddab6088705a478a76fca0f727a3abe48855ac1011e7364d298ca2",
+      "publishedSha256": "98980973b3ddab6088705a478a76fca0f727a3abe48855ac1011e7364d298ca2",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoSurfaceApproach.h",
+      "bytes": 4124,
+      "sourceSha256": "07194e35e714776dd2f5a559ab26ce9ca07a436a5b04702dacc7ca337c9a5631",
+      "publishedSha256": "07194e35e714776dd2f5a559ab26ce9ca07a436a5b04702dacc7ca337c9a5631",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoTerrainContinuation.h",
+      "bytes": 1944,
+      "sourceSha256": "fa519857ef56b83fcfd714c5d2ed8f88b8e0aacb548c66df7d9a0b20a8778f1f",
+      "publishedSha256": "fa519857ef56b83fcfd714c5d2ed8f88b8e0aacb548c66df7d9a0b20a8778f1f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoTerrainFlight.h",
+      "bytes": 16091,
+      "sourceSha256": "195068c0fe22ce38bcf4cc04e3dc98988e4f25eb22a5ad01da9c9b7c3d7f4746",
+      "publishedSha256": "195068c0fe22ce38bcf4cc04e3dc98988e4f25eb22a5ad01da9c9b7c3d7f4746",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NFSMWEventLoader.vcxproj",
+      "bytes": 3401,
+      "sourceSha256": "cceab62ebc9dc5681e08350b962f793b6452a89836af4168db6c88530e54a3c1",
+      "publishedSha256": "3be81622d3dd18b135dec33f22725a06044e9020e070950f7437520394e892ea",
+      "adaptation": "Replace private D3DX location with overridable D3DXRoot; runtime sources unchanged."
+    },
+    {
+      "path": "NFSMWEventLoader/src/OpponentAppearanceSafety.inl",
+      "bytes": 2874,
+      "sourceSha256": "35d4bbf8b9a3954b46661a3be956fc36464d481915d4de6e788ddcf95552b3ab",
+      "publishedSha256": "35d4bbf8b9a3954b46661a3be956fc36464d481915d4de6e788ddcf95552b3ab",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/OpponentRosterPolicy.h",
+      "bytes": 344,
+      "sourceSha256": "c9b299373070855599280a3e490957c7b3ec239242592660b07263b6af51964e",
+      "publishedSha256": "c9b299373070855599280a3e490957c7b3ec239242592660b07263b6af51964e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PackageResources.h",
+      "bytes": 13484,
+      "sourceSha256": "e62ec9f48aa0724fcc2546e0f1e6e75827d14f856c4215140aef61a44cb42edb",
+      "publishedSha256": "e62ec9f48aa0724fcc2546e0f1e6e75827d14f856c4215140aef61a44cb42edb",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PackageSelection.h",
+      "bytes": 2041,
+      "sourceSha256": "a1b6205ac4c05daf5596fd3eebb59268a9b37c783dc16a746fabe542f6388af6",
+      "publishedSha256": "a1b6205ac4c05daf5596fd3eebb59268a9b37c783dc16a746fabe542f6388af6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PackageSelectionTests.cpp",
+      "bytes": 2676,
+      "sourceSha256": "3dead16af55d58b8fedacb4b6e2c526b03cd503a8c15c6599b6a4f91f6eb3ce7",
+      "publishedSha256": "3dead16af55d58b8fedacb4b6e2c526b03cd503a8c15c6599b6a4f91f6eb3ce7",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PackageSelectionTests.vcxproj",
+      "bytes": 1527,
+      "sourceSha256": "84b59ea5b51f3569f8b6f16ae90d612da4cd2d52e100445145fb04237f27c7bc",
+      "publishedSha256": "84b59ea5b51f3569f8b6f16ae90d612da4cd2d52e100445145fb04237f27c7bc",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PlayerLapNotice.h",
+      "bytes": 812,
+      "sourceSha256": "0eb7473c0a729a8793f07d25238aee90b4165aa8d9d55e3d9fa6cafcab662452",
+      "publishedSha256": "0eb7473c0a729a8793f07d25238aee90b4165aa8d9d55e3d9fa6cafcab662452",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PlayerResourceDiagnostics.h",
+      "bytes": 3574,
+      "sourceSha256": "77bdfcd5ecaf2cecb7ce06da1826c78c3f8b4a371fe9ff06e295392e80c03608",
+      "publishedSha256": "77bdfcd5ecaf2cecb7ce06da1826c78c3f8b4a371fe9ff06e295392e80c03608",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PlayerTextureRepair.h",
+      "bytes": 2795,
+      "sourceSha256": "73af1a583df1c95b730aa33336522b91235601877e002a0c63dbd7c7dad4530b",
+      "publishedSha256": "73af1a583df1c95b730aa33336522b91235601877e002a0c63dbd7c7dad4530b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PoliceDeploymentLease.h",
+      "bytes": 1470,
+      "sourceSha256": "4c8ec9935c17936931ee868ad6b94be092f1a0502ae08bb7553ad54295acc0fa",
+      "publishedSha256": "4c8ec9935c17936931ee868ad6b94be092f1a0502ae08bb7553ad54295acc0fa",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PoliceDeploymentPolicy.h",
+      "bytes": 529,
+      "sourceSha256": "f525aae78e88e04b4abf788885751e278505c7b188e76e92387c9cb54d165aac",
+      "publishedSha256": "f525aae78e88e04b4abf788885751e278505c7b188e76e92387c9cb54d165aac",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PoliceHelicopterNative.h",
+      "bytes": 5681,
+      "sourceSha256": "0eeeb85c7a10c822ef7007b4818c9734551fa72a255f2e979ce641830638ac70",
+      "publishedSha256": "0eeeb85c7a10c822ef7007b4818c9734551fa72a255f2e979ce641830638ac70",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/PoliceSupportRuntime.h",
+      "bytes": 13487,
+      "sourceSha256": "87e02fef2ad626dd44b12eeb88ac403566fda99d1b8969d2834232d6214041d8",
+      "publishedSha256": "87e02fef2ad626dd44b12eeb88ac403566fda99d1b8969d2834232d6214041d8",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/ProfileProgress.h",
+      "bytes": 6322,
+      "sourceSha256": "c72cbf68731183ccb3e3b7d9c6a0fc4f7cb7a617e53fcce99b6b6f99551dab42",
+      "publishedSha256": "c72cbf68731183ccb3e3b7d9c6a0fc4f7cb7a617e53fcce99b6b6f99551dab42",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RaceOpponentPolicy.h",
+      "bytes": 875,
+      "sourceSha256": "f4d7e592526f3edfdd0f78815e02405c437010c5e853606dc72eead3df71d8dc",
+      "publishedSha256": "f4d7e592526f3edfdd0f78815e02405c437010c5e853606dc72eead3df71d8dc",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RaceStartExperiment.h",
+      "bytes": 33657,
+      "sourceSha256": "3200a1be2540b16a2b89a02995c618ced1ba5484933092f1b1e25f5d4437900b",
+      "publishedSha256": "3200a1be2540b16a2b89a02995c618ced1ba5484933092f1b1e25f5d4437900b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RadarTransition.h",
+      "bytes": 1201,
+      "sourceSha256": "ad0e2a09cf491a957826eb3a9c1f039ac51f570fbed99101ea3b04471449067e",
+      "publishedSha256": "ad0e2a09cf491a957826eb3a9c1f039ac51f570fbed99101ea3b04471449067e",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RadarTransitionTests.cpp",
+      "bytes": 6056,
+      "sourceSha256": "9b1d369c85929a58a14483bda3ebd548ba4b2e7b5be10a10d36994358c418c14",
+      "publishedSha256": "9b1d369c85929a58a14483bda3ebd548ba4b2e7b5be10a10d36994358c418c14",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RadarTransitionTests.vcxproj",
+      "bytes": 1509,
+      "sourceSha256": "c20f5aa56570fdbd7f6f3c1617286fa4fd1f3cbbcba6072d93095df20e8ca840",
+      "publishedSha256": "c20f5aa56570fdbd7f6f3c1617286fa4fd1f3cbbcba6072d93095df20e8ca840",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RegistrationExperiment.h",
+      "bytes": 82138,
+      "sourceSha256": "a66b13945f11094935388663ae4d8f7985f05229b97c628655855b30e8109682",
+      "publishedSha256": "a66b13945f11094935388663ae4d8f7985f05229b97c628655855b30e8109682",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RepeatLapRoad.h",
+      "bytes": 1935,
+      "sourceSha256": "0bc52e12f94d8737799b0c7aa94eb6bfb1e0a6f1184b0c81c847df2e2bbaa7e9",
+      "publishedSha256": "0bc52e12f94d8737799b0c7aa94eb6bfb1e0a6f1184b0c81c847df2e2bbaa7e9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RouteProgress.h",
+      "bytes": 2122,
+      "sourceSha256": "e1831a1fb9950141cecbe2cc66bee0ac7826af659df802fbbb1517c2e86e2d03",
+      "publishedSha256": "e1831a1fb9950141cecbe2cc66bee0ac7826af659df802fbbb1517c2e86e2d03",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RouteProgressTests.cpp",
+      "bytes": 1934,
+      "sourceSha256": "b45eaf8c628a28c9b80af1d3adc78282618fb76ade3708ed5867d5d1bdc7711c",
+      "publishedSha256": "b45eaf8c628a28c9b80af1d3adc78282618fb76ade3708ed5867d5d1bdc7711c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RouteProgressTests.vcxproj",
+      "bytes": 1323,
+      "sourceSha256": "86873a19459414101422158b4a68437422efcd6226a2de5bf3c23b601ff66713",
+      "publishedSha256": "86873a19459414101422158b4a68437422efcd6226a2de5bf3c23b601ff66713",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/Runtime.cpp",
+      "bytes": 46553,
+      "sourceSha256": "98f8f4a4e33b7bbd5abdadd6ac9ee3fdba229ec80a12150ae82a2b5a4fe3760d",
+      "publishedSha256": "98f8f4a4e33b7bbd5abdadd6ac9ee3fdba229ec80a12150ae82a2b5a4fe3760d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/RuntimeLifecycle.h",
+      "bytes": 19674,
+      "sourceSha256": "b6d62566bf78b3831a8174d4db66ef4438dd3b4f2fe3fe520df9ab6ef8f8e4e3",
+      "publishedSha256": "b6d62566bf78b3831a8174d4db66ef4438dd3b4f2fe3fe520df9ab6ef8f8e4e3",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/UpdateNotice.cpp",
+      "bytes": 7595,
+      "sourceSha256": "214e3935ed726523632b9077a95d40300a5ff5bc1d7afc8f38d0e6ffc1ec26f4",
+      "publishedSha256": "214e3935ed726523632b9077a95d40300a5ff5bc1d7afc8f38d0e6ffc1ec26f4",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/UpdateNotice.h",
+      "bytes": 251,
+      "sourceSha256": "72a9bdc1c619a4f1fb6b21c1cf1de078be7f742db5aa374544a102510910e154",
+      "publishedSha256": "72a9bdc1c619a4f1fb6b21c1cf1de078be7f742db5aa374544a102510910e154",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/UpdateRelease.h",
+      "bytes": 5497,
+      "sourceSha256": "ded52b30243f8e772604d83d90f3171f97ff67bc3331baaecba1dfa2c457058d",
+      "publishedSha256": "ded52b30243f8e772604d83d90f3171f97ff67bc3331baaecba1dfa2c457058d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/WorldCompatibility.h",
+      "bytes": 2794,
+      "sourceSha256": "943238e066a71d5f8944c8a9833b2916ac20fb450d62c087b20203bf9c6f0a33",
+      "publishedSha256": "943238e066a71d5f8944c8a9833b2916ac20fb450d62c087b20203bf9c6f0a33",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/map_resource_identity.cpp",
+      "bytes": 639,
+      "sourceSha256": "b021a7070fa1335a49f72b4e52802ff2ca40afa2996daaf6cca1a28483924c8f",
+      "publishedSha256": "b021a7070fa1335a49f72b4e52802ff2ca40afa2996daaf6cca1a28483924c8f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/native_collision_build.cpp",
+      "bytes": 3017,
+      "sourceSha256": "2093e5be6584689a0a82629cab42fbe35b5be56ad85717ab936cbbd0ca74178d",
+      "publishedSha256": "2093e5be6584689a0a82629cab42fbe35b5be56ad85717ab936cbbd0ca74178d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/NativeCollisionBuild.vcxproj",
+      "bytes": 1376,
+      "sourceSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
+      "publishedSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/preview_bounds.cpp",
+      "bytes": 780,
+      "sourceSha256": "ae3742e9465434d4c8a58955840c0bd1803747e193279eef9386758d45254e43",
+      "publishedSha256": "ae3742e9465434d4c8a58955840c0bd1803747e193279eef9386758d45254e43",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/repeat_lap_road.cpp",
+      "bytes": 2285,
+      "sourceSha256": "d3af761b7d6ec59b0bd93d856daffc2121f69b1c19895636a988ea1db8e314bf",
+      "publishedSha256": "d3af761b7d6ec59b0bd93d856daffc2121f69b1c19895636a988ea1db8e314bf",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tests/update_notice.cpp",
+      "bytes": 6130,
+      "sourceSha256": "fb61bb67dea9c21cd925f3e12e92779b406a037f58faa43311712a87ca2c21aa",
+      "publishedSha256": "fb61bb67dea9c21cd925f3e12e92779b406a037f58faa43311712a87ca2c21aa",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/Probe.cpp",
+      "bytes": 26468,
+      "sourceSha256": "0530b448aed8085529557301e466d50be3f7654ddcacd130c38e7bf6bff8038c",
+      "publishedSha256": "0530b448aed8085529557301e466d50be3f7654ddcacd130c38e7bf6bff8038c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/ProbeRenderer.h",
+      "bytes": 13666,
+      "sourceSha256": "b4ed1af6fec1ac13bf1b59306eeb4f7eefe9154aa40b48e1531ff9fdc4749be0",
+      "publishedSha256": "b4ed1af6fec1ac13bf1b59306eeb4f7eefe9154aa40b48e1531ff9fdc4749be0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneAssets.h",
+      "bytes": 4555,
+      "sourceSha256": "58066ec9b77953db86e66fe0573a82e1f7c10c252048c09a46b3b7c50b8301f0",
+      "publishedSha256": "58066ec9b77953db86e66fe0573a82e1f7c10c252048c09a46b3b7c50b8301f0",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneCrowd.h",
+      "bytes": 6987,
+      "sourceSha256": "e88d4e5515d2f80131538b2a96b852e3f589cc258d1fd11989aaf758865179a3",
+      "publishedSha256": "e88d4e5515d2f80131538b2a96b852e3f589cc258d1fd11989aaf758865179a3",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneEngineRevs.h",
+      "bytes": 2788,
+      "sourceSha256": "59035399508422a31ae17aba8481491ff55976a63154194e2f689bbdaf22e4d1",
+      "publishedSha256": "59035399508422a31ae17aba8481491ff55976a63154194e2f689bbdaf22e4d1",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneGround.h",
+      "bytes": 1433,
+      "sourceSha256": "2ef4c1ea5d7ae789726205ea6409b06286805aceb60dbb325fcda1619d42098f",
+      "publishedSha256": "2ef4c1ea5d7ae789726205ea6409b06286805aceb60dbb325fcda1619d42098f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneLighting.h",
+      "bytes": 5811,
+      "sourceSha256": "1ed3863691ea00aabb319441560e63f5b51d87aeb8f567945291ca5dd13e4e11",
+      "publishedSha256": "1ed3863691ea00aabb319441560e63f5b51d87aeb8f567945291ca5dd13e4e11",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/ScenePcm.h",
+      "bytes": 1385,
+      "sourceSha256": "e3bdd6f6c72968568d5d1f4c3cd059877bc5908a92482e4e334909d6e9f0651d",
+      "publishedSha256": "e3bdd6f6c72968568d5d1f4c3cd059877bc5908a92482e4e334909d6e9f0651d",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneRuntime.h",
+      "bytes": 26889,
+      "sourceSha256": "31deeceabd649c7939e93b5093e616f3ac76d4bd0131221904f772936133d763",
+      "publishedSha256": "31deeceabd649c7939e93b5093e616f3ac76d4bd0131221904f772936133d763",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/SceneWave.h",
+      "bytes": 5275,
+      "sourceSha256": "352457bb90f2c9bbf36894ee2dbeb1c78300d229d71296ce1f2b403826f83756",
+      "publishedSha256": "352457bb90f2c9bbf36894ee2dbeb1c78300d229d71296ce1f2b403826f83756",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/tools/CarbonIntro/Ug2Flare.h",
+      "bytes": 7854,
+      "sourceSha256": "e56bac2f30ee56527dafcc35bc63a7403ddaf637917ae0547063f54d5b83e6e6",
+      "publishedSha256": "e56bac2f30ee56527dafcc35bc63a7403ddaf637917ae0547063f54d5b83e6e6",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/NFSMWHudLifecycleFix.ini",
+      "bytes": 24,
+      "sourceSha256": "e89905c14d5e930ac82bdeff2a0e17dbc61c0eeabb0df74436e29861b9e2a63a",
+      "publishedSha256": "e89905c14d5e930ac82bdeff2a0e17dbc61c0eeabb0df74436e29861b9e2a63a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/NFSMWHudLifecycleFix.vcxproj",
+      "bytes": 3130,
+      "sourceSha256": "05cb68c420e8419ac0c119623430481882a04a9ff790de3c836f11fe969aac77",
+      "publishedSha256": "05cb68c420e8419ac0c119623430481882a04a9ff790de3c836f11fe969aac77",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/src/CombatHud.h",
+      "bytes": 7713,
+      "sourceSha256": "5053727211530b30e063fd1485b7cd24817f56b2e3bb39a932047a08ca6c745c",
+      "publishedSha256": "5053727211530b30e063fd1485b7cd24817f56b2e3bb39a932047a08ca6c745c",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/src/HealthbarsBridge.h",
+      "bytes": 8363,
+      "sourceSha256": "5f9716757b6d073efdd8d00d66333b508143a98b533c4eff4d33323fb745b207",
+      "publishedSha256": "5f9716757b6d073efdd8d00d66333b508143a98b533c4eff4d33323fb745b207",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/src/Layout.h",
+      "bytes": 537,
+      "sourceSha256": "7a2562e0f378dbb8f1b53bff81a20b724e7e3cfbb6ce18df6357cc345738ff83",
+      "publishedSha256": "7a2562e0f378dbb8f1b53bff81a20b724e7e3cfbb6ce18df6357cc345738ff83",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/src/Lifecycle.h",
+      "bytes": 1078,
+      "sourceSha256": "e73cb2ece0a73f7302d5d512b623fe9d1420c53c0d46eda30ce58c6af03c2cdd",
+      "publishedSha256": "e73cb2ece0a73f7302d5d512b623fe9d1420c53c0d46eda30ce58c6af03c2cdd",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/src/Plugin.cpp",
+      "bytes": 10675,
+      "sourceSha256": "1b395fd18ecfb4dfc189b85983be8cb860303429ebd31bcf3a3ce0dfd43a3b3f",
+      "publishedSha256": "1b395fd18ecfb4dfc189b85983be8cb860303429ebd31bcf3a3ce0dfd43a3b3f",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/tests/NativeTests.cpp",
+      "bytes": 4985,
+      "sourceSha256": "e1ba580c6823486983a2bfbfaed6768756826fbc89effcd88d07fbca5a3af38a",
+      "publishedSha256": "e1ba580c6823486983a2bfbfaed6768756826fbc89effcd88d07fbca5a3af38a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/include/MinHook.h",
+      "bytes": 7715,
+      "sourceSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
+      "publishedSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/LICENSE.txt",
+      "bytes": 4446,
+      "sourceSha256": "4f21f857550d7be854da6ea5f2da4e6775ca4e3fbb535e4f3d961c47d0bf3335",
+      "publishedSha256": "4f21f857550d7be854da6ea5f2da4e6775ca4e3fbb535e4f3d961c47d0bf3335",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/buffer.c",
+      "bytes": 10126,
+      "sourceSha256": "69045b390e0f18cf149ea0451ae750f389654eb8d2ed7f2f89c7ff04b7909519",
+      "publishedSha256": "69045b390e0f18cf149ea0451ae750f389654eb8d2ed7f2f89c7ff04b7909519",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/buffer.h",
+      "bytes": 1862,
+      "sourceSha256": "175ec5496c020509cf4c7670322b51b5bcd5b63a345bfefc4a19b43675857fa7",
+      "publishedSha256": "175ec5496c020509cf4c7670322b51b5bcd5b63a345bfefc4a19b43675857fa7",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/hde/hde32.c",
+      "bytes": 9642,
+      "sourceSha256": "2d4d7dd73d609028822aaf71ac05112b83fe6cc2ae2d6d71fa051b3fc6acfc43",
+      "publishedSha256": "2d4d7dd73d609028822aaf71ac05112b83fe6cc2ae2d6d71fa051b3fc6acfc43",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/hde/hde32.h",
+      "bytes": 2555,
+      "sourceSha256": "754579fbcec5f64fa229646ceecb241c0b7f31c8a0bb12370e604c316c569315",
+      "publishedSha256": "754579fbcec5f64fa229646ceecb241c0b7f31c8a0bb12370e604c316c569315",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/hde/pstdint.h",
+      "bytes": 1701,
+      "sourceSha256": "975488009779ea99c7e04b83a160397d5cd7195cb5bf6ad79180805f756c7d00",
+      "publishedSha256": "975488009779ea99c7e04b83a160397d5cd7195cb5bf6ad79180805f756c7d00",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/hde/table32.h",
+      "bytes": 3581,
+      "sourceSha256": "e56f8641bd9133c1b99a1e6555b19eebe7ed663e5ea8de4edbe74ba461161ab4",
+      "publishedSha256": "e56f8641bd9133c1b99a1e6555b19eebe7ed663e5ea8de4edbe74ba461161ab4",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/hook.c",
+      "bytes": 27565,
+      "sourceSha256": "4005d39875ca4b8a957aabba73bd053cba77e50a8b383d48e0cb44c13f26669b",
+      "publishedSha256": "4005d39875ca4b8a957aabba73bd053cba77e50a8b383d48e0cb44c13f26669b",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/trampoline.c",
+      "bytes": 11038,
+      "sourceSha256": "824ed887ec9da606960962af8973205d1f97cd03241e75517eba485280fb6377",
+      "publishedSha256": "824ed887ec9da606960962af8973205d1f97cd03241e75517eba485280fb6377",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/src/trampoline.h",
+      "bytes": 3864,
+      "sourceSha256": "23681f7768d5dbd23ea14b45ba64e488a337501f23122253c532b05dbed4b85f",
+      "publishedSha256": "23681f7768d5dbd23ea14b45ba64e488a337501f23122253c532b05dbed4b85f",
+      "adaptation": null
+    }
+  ],
+  "standaloneBuild": {
+    "HUDLifecycleFix": true,
+    "EventLoader": false,
+    "reason": "Full Event Loader compilation requires external NFRR dependencies and unpublished World2MW headers."
+  }
+}

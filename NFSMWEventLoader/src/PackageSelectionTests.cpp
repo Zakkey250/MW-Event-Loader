@@ -1,0 +1,13 @@
+#include "PackageSelection.h"
+#include <iostream>
+using namespace mwel;
+void Check(bool yes,const char* text){if(!yes)throw std::runtime_error(text);}
+EventPackage Item(std::string id,std::string event,std::string source,bool correction=true){EventPackage p;p.id=id;p.nativeEventId=event;p.nativeNamespace="mwel_"+id;p.authoring={{"title",id},{"authoringMode",correction?"correction":"additional"}};if(correction)p.authoring["correctionTarget"]={{"name",source}};return p;}
+int main(int argc,char** argv){try{
+ auto a=Item("old","1.2.1","race_bin_01/1_2_1_sprint"),b=Item("new","1.2.1","race_bin_01/1_2_1_sprint"),c=Item("unrelated","15.1.1","other"),d=Item("added","E12345678","",false);
+ for(bool reverse:{false,true}){std::vector<EventPackage> rows={a,b,c,d};if(reverse)std::reverse(rows.begin(),rows.end());unsigned rejected=0;SelectPackages(rows,[](const auto& p){return fs::file_time_type{}+std::chrono::seconds(p.id=="new"?2:1);},[&](const auto& old,const auto& keep,const char*){Check(old.id=="old"&&keep.id=="new","wrong winner");++rejected;});Check(rows.size()==3&&rejected==1,"unrelated package lost");for(auto& row:rows)Check(row.id!="old","stale correction retained");}
+ {std::vector<EventPackage> rows={a,b};SelectPackages(rows,[](const auto&){return fs::file_time_type{};},[](const auto&,const auto&,const char*){});Check(rows.size()==1&&rows[0].id=="new","tie depends on iteration");}
+ {auto x=Item("title","1_2_1","distinct");std::vector<EventPackage> rows={a,x};unsigned rejected=0;SelectPackages(rows,[](const auto&){return fs::file_time_type{};},[&](const auto&,const auto&,const char* why){Check(std::string(why)=="title_key","title collision not caught");++rejected;});Check(rejected==1,"title collision accepted");}
+ if(argc==2){std::vector<EventPackage> rows;for(auto& entry:fs::directory_iterator(fs::path(argv[1])/L"CustomEvents"))if(entry.is_directory()&&EventId(entry.path().filename().string()))rows.push_back(ParsePackage(entry.path()));auto before=rows.size();unsigned rejected=0;SelectPackages(rows,[](const auto& p){return fs::last_write_time(p.directory/L"event.json");},[&](const auto& a,const auto& b,const char* why){++rejected;std::cout<<"SUPERSEDED "<<a.id<<" retained="<<b.id<<" reason="<<why<<"\n";});Check(before==9&&rows.size()==8&&rejected==1,"Main fixture count differs");for(auto& p:rows)if(p.nativeEventId=="1.2.1")Check(p.id=="43a91907-4c30-4e56-ab24-276fc8312977","latest Main correction not selected");}
+ std::cout<<"PASS deterministic newest correction; unrelated packages; stable ties; title-key collision; actual Main packages\n";return 0;
+}catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}}

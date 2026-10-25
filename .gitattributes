@@ -1,0 +1,4 @@
+# Preserve the published source fingerprints across Windows/Linux checkouts.
+/NFSMWEventLoader/** -text
+/NFSMWHudLifecycleFix/** -text
+/integration/** -text

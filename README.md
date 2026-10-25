@@ -323,4 +323,6 @@ See the included documentation for other library credits, third-party notices an
 
 ## Licenses
 
+The current Event Loader and HUD Lifecycle Fix runtime sources are available in this repository. See [source layout and build instructions](docs/Source-Build.md). Editor, Cutscene Converter and ArmsAssist source code is not included.
+
 Repository material retains the [MIT license](LICENSE). Bundled components and third-party material retain their own included notices and terms. ArmsAssist source is not included.

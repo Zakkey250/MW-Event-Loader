@@ -5,3 +5,19 @@
 *.pdb
 *.log
 *.w2race.json
+*.obj
+*.pch
+*.lib
+*.exp
+*.tlog
+*.lastbuildstate
+*.vcxproj.user
+.vs/
+**/build/
+**/bin/
+**/obj/
+**/obj-native-tests/
+external/
+# External project code must not be published in this repository.
+/NFSMWNativeFreeRoamRacers/
+/World2MW/
