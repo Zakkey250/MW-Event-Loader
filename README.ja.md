@@ -4,7 +4,7 @@
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader v1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.1) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.0.1 Hotfix](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.1) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。
