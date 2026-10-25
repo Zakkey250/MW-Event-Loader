@@ -19,7 +19,8 @@ inline bool Compatible(Mode m,const char* base,unsigned count){
  if(m==Mode::None)return true;
  if(m==Mode::Invalid||count<1||count>16)return false;
  if(m==Mode::HotPursuit&&count>8)return false;
- if(m==Mode::Gauntlet)return count==2&&!std::strcmp(base,"tollboothrace");
+ // Police are pursuit actors, not entrants. Read legacy two-slot packages too.
+ if(m==Mode::Gauntlet)return (count==1||count==2)&&!std::strcmp(base,"tollboothrace");
  if(m==Mode::Drift)return !std::strcmp(base,"sprint")||!std::strcmp(base,"circuit");
  if(m==Mode::ArmsRace)return !std::strcmp(base,"sprint")||!std::strcmp(base,"speedtraprace")||!std::strcmp(base,"circuit")||!std::strcmp(base,"lapknockout");
  return !std::strcmp(base,"sprint")||!std::strcmp(base,"speedtraprace");

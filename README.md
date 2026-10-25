@@ -4,7 +4,7 @@
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader v1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.0) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader v1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.1) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.

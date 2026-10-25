@@ -56,9 +56,9 @@
     },
     {
       "path": "integration/MWCombatContract.h",
-      "bytes": 4076,
-      "sourceSha256": "e97088840c9d12dc4d5bf7d91242670a4afb3131ff56f493b4a7c8b0d818f7c4",
-      "publishedSha256": "e97088840c9d12dc4d5bf7d91242670a4afb3131ff56f493b4a7c8b0d818f7c4",
+      "bytes": 4169,
+      "sourceSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
+      "publishedSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
       "adaptation": null
     },
     {
@@ -217,9 +217,9 @@
     },
     {
       "path": "NFSMWEventLoader/src/CombatHealthTests.cpp",
-      "bytes": 14220,
-      "sourceSha256": "3382209d619ba48512293e9ba624ecf4b318be979a25bc31bce7c11ee12eb67a",
-      "publishedSha256": "3382209d619ba48512293e9ba624ecf4b318be979a25bc31bce7c11ee12eb67a",
+      "bytes": 14535,
+      "sourceSha256": "e4a7520feeb615e859da69fe982a6c5b40edfab20d011c7a79570745bd57925d",
+      "publishedSha256": "e4a7520feeb615e859da69fe982a6c5b40edfab20d011c7a79570745bd57925d",
       "adaptation": null
     },
     {
@@ -1330,9 +1330,9 @@
     },
     {
       "path": "NFSMWEventLoader/src/UpdateNotice.h",
-      "bytes": 251,
-      "sourceSha256": "72a9bdc1c619a4f1fb6b21c1cf1de078be7f742db5aa374544a102510910e154",
-      "publishedSha256": "72a9bdc1c619a4f1fb6b21c1cf1de078be7f742db5aa374544a102510910e154",
+      "bytes": 258,
+      "sourceSha256": "0c27c8982e431e8f0e598e9f2dac3fcb7c3f90be6f61d2b6dba872a7a86f8e39",
+      "publishedSha256": "0c27c8982e431e8f0e598e9f2dac3fcb7c3f90be6f61d2b6dba872a7a86f8e39",
       "adaptation": null
     },
     {
@@ -1386,9 +1386,9 @@
     },
     {
       "path": "NFSMWEventLoader/tests/update_notice.cpp",
-      "bytes": 6130,
-      "sourceSha256": "fb61bb67dea9c21cd925f3e12e92779b406a037f58faa43311712a87ca2c21aa",
-      "publishedSha256": "fb61bb67dea9c21cd925f3e12e92779b406a037f58faa43311712a87ca2c21aa",
+      "bytes": 6184,
+      "sourceSha256": "836fde900ac5bf4b1d708a3906a8e086e428de591c01f2f0e5715d85a0304141",
+      "publishedSha256": "836fde900ac5bf4b1d708a3906a8e086e428de591c01f2f0e5715d85a0304141",
       "adaptation": null
     },
     {
@@ -1606,5 +1606,6 @@
     "HUDLifecycleFix": true,
     "EventLoader": false,
     "reason": "Full Event Loader compilation requires external NFRR dependencies and unpublished World2MW headers."
-  }
+  },
+  "version": "1.0.1 Hotfix"
 }

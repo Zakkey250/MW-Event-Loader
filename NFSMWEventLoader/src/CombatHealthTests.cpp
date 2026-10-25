@@ -8,6 +8,10 @@
 #include <cstdlib>
 void Check(bool ok,const char* what){if(!ok){std::printf("FAIL %s\n",what);std::exit(1);}}
 int main(){
+ for(unsigned count=1;count<=16;++count){
+  Check(mwcombat::Compatible(mwcombat::Mode::Gauntlet,"tollboothrace",count)==(count<=2),"Gauntlet accepts one racer and legacy two-slot packages only");
+  Check(!mwcombat::Compatible(mwcombat::Mode::Gauntlet,"sprint",count),"Gauntlet never accepts a sprint base");
+ }
  for(auto m:{mwcombat::Mode::ArmsRace,mwcombat::Mode::HotPursuit})for(auto base:{"sprint","circuit","lapknockout","speedtraprace"})
   Check(mwcombat::Compatible(m,base,8)==(m==mwcombat::Mode::ArmsRace||!std::strcmp(base,"sprint")||!std::strcmp(base,"speedtraprace")),"Arms four rules; Hot Pursuit linear rules only");
  for(unsigned limit:{4u,8u,16u})for(unsigned active=0;active<=18;++active)for(unsigned pending=0;pending<=18;++pending)
