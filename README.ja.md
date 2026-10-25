@@ -2,15 +2,18 @@
 
 [English](README.md) · [イベントエディタ](https://zakkey250.github.io/MW-Event-Editor/) · [リリース一覧](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
-> **1.0.1 Hotfixを2026年10月25日に再ビルドしました。** 以前のZIPを保存済みの場合は、今回のZIPを再取得してください。再ビルドしたArmsAssistと最終ZIPは、Microsoft Defenderの定義 **1.461.194.0** によるローカル検査を通過しています。旧ArmsAssistの検出はMicrosoftへ審査依頼済みです。この検査結果はMicrosoftの最終判定や、すべてのセキュリティ製品での検出回避を保証するものではありません。チェックサムと検査結果はリリースに掲載しています。
+
+> **1.0.2 Hotfix:** 純正イベントで追加カットシーンを使った際の逆向きスタートを修正しました。同梱INIの全99項目に日英の説明を追加しています。更新時は既存INIを保存してください。
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader 1.0.1 Hotfix — 再ビルド版](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.1) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.0.2 Hotfix](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.2) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。
 
+
+設定項目の説明: [日本語](docs/INI-Settings-JA.txt) · [English](docs/INI-Settings-EN.txt)
 
 ## 概要
 

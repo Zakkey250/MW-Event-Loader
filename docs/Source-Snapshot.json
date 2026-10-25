@@ -13,101 +13,10 @@
   ],
   "files": [
     {
-      "path": "integration/AppearanceSafety.h",
-      "bytes": 1359,
-      "sourceSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
-      "publishedSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
-      "adaptation": null
-    },
-    {
-      "path": "integration/EventLoaderPaths.h",
-      "bytes": 691,
-      "sourceSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
-      "publishedSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
-      "adaptation": null
-    },
-    {
-      "path": "integration/InstalledCarType.h",
-      "bytes": 1066,
-      "sourceSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
-      "publishedSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWBarrierSpatialIndex.h",
-      "bytes": 2132,
-      "sourceSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
-      "publishedSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWCheckpointRuntime.h",
-      "bytes": 3901,
-      "sourceSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
-      "publishedSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWCheckpointRuntimeApi.h",
-      "bytes": 256,
-      "sourceSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
-      "publishedSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWCombatContract.h",
-      "bytes": 4169,
-      "sourceSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
-      "publishedSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWEventGeometryApi.h",
-      "bytes": 1054,
-      "sourceSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
-      "publishedSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWEventSceneApi.h",
-      "bytes": 326,
-      "sourceSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
-      "publishedSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWNativeSpeechPolicy.h",
-      "bytes": 560,
-      "sourceSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
-      "publishedSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWNeoObstacles.h",
-      "bytes": 562,
-      "sourceSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
-      "publishedSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
-      "adaptation": null
-    },
-    {
-      "path": "integration/MWRaceBarrierPolicy.h",
-      "bytes": 1984,
-      "sourceSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
-      "publishedSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
-      "adaptation": null
-    },
-    {
-      "path": "integration/NativeFloatMath.h",
-      "bytes": 950,
-      "sourceSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
-      "publishedSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
-      "adaptation": null
-    },
-    {
       "path": "NFSMWEventLoader/NFSMWEventLoader.ini",
-      "bytes": 2564,
-      "sourceSha256": "5de42125a5288157263e732ac3a468a3d5b478ae741088d76667978cf30cfa56",
-      "publishedSha256": "5de42125a5288157263e732ac3a468a3d5b478ae741088d76667978cf30cfa56",
+      "bytes": 6765,
+      "sourceSha256": "625b011a02571f0832f0bb28dda2bf1822ccebf9eaa4cd84cd09e9460dc6e5ab",
+      "publishedSha256": "625b011a02571f0832f0bb28dda2bf1822ccebf9eaa4cd84cd09e9460dc6e5ab",
       "adaptation": null
     },
     {
@@ -122,6 +31,13 @@
       "bytes": 1667,
       "sourceSha256": "5e3051dc8b8a03417a0a8aefd228fb340524327aad79fb153b9d15a328886863",
       "publishedSha256": "5e3051dc8b8a03417a0a8aefd228fb340524327aad79fb153b9d15a328886863",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/CarbonIntroPose.h",
+      "bytes": 1219,
+      "sourceSha256": "88ee7471b419dc1b6ddb37f4c2b004ba58f7747c7e0bff4952c1b863b8f74749",
+      "publishedSha256": "88ee7471b419dc1b6ddb37f4c2b004ba58f7747c7e0bff4952c1b863b8f74749",
       "adaptation": null
     },
     {
@@ -601,6 +517,13 @@
       "adaptation": null
     },
     {
+      "path": "NFSMWEventLoader/src/NFSMWEventLoader.vcxproj",
+      "bytes": 3401,
+      "sourceSha256": "cceab62ebc9dc5681e08350b962f793b6452a89836af4168db6c88530e54a3c1",
+      "publishedSha256": "3be81622d3dd18b135dec33f22725a06044e9020e070950f7437520394e892ea",
+      "adaptation": "Replace private D3DX location with overridable D3DXRoot; runtime sources unchanged."
+    },
+    {
       "path": "NFSMWEventLoader/src/NativeCashValue.h",
       "bytes": 756,
       "sourceSha256": "d64b7a7a617ba07849d9d016687dffc70a40ac816427aac3fef2e294720386c9",
@@ -711,6 +634,20 @@
       "sourceSha256": "e94ec3583194be8978f944e0c74dae45ee6e3824eee91b4750f7edd291089a0a",
       "publishedSha256": "03d998fe3e514d4cdc1424f1e6e9945f91b4eb9555099d7929879d0ee6ee2cdb",
       "adaptation": "Replace private D3DX header include path with standard include resolved through D3DXRoot; implementation unchanged."
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeScenePoseTests.cpp",
+      "bytes": 3790,
+      "sourceSha256": "b31185e999ae3e40ceaeec1e57988677982c32922e662c0f4cfd93102deeb3c9",
+      "publishedSha256": "b31185e999ae3e40ceaeec1e57988677982c32922e662c0f4cfd93102deeb3c9",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NativeScenePoseTests.vcxproj",
+      "bytes": 1344,
+      "sourceSha256": "e8b8606c9474028e72bdac3751f9d6c6c0597badfe8cb3bf7d1d2c8c2c7d2e92",
+      "publishedSha256": "e8b8606c9474028e72bdac3751f9d6c6c0597badfe8cb3bf7d1d2c8c2c7d2e92",
+      "adaptation": null
     },
     {
       "path": "NFSMWEventLoader/src/NativeWallSolids.h",
@@ -1007,17 +944,17 @@
       "adaptation": null
     },
     {
-      "path": "NFSMWEventLoader/src/NeoPlanningAsync.inl",
-      "bytes": 7499,
-      "sourceSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
-      "publishedSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
-      "adaptation": null
-    },
-    {
       "path": "NFSMWEventLoader/src/NeoPlanShift.h",
       "bytes": 980,
       "sourceSha256": "16478d53a06b985137410d1e0ea07c2e39585ccc8104301074801deabf1ea166",
       "publishedSha256": "16478d53a06b985137410d1e0ea07c2e39585ccc8104301074801deabf1ea166",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWEventLoader/src/NeoPlanningAsync.inl",
+      "bytes": 7499,
+      "sourceSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
+      "publishedSha256": "9af4b7ec43594d70371e973f5a43d71cacdb757183e646c54300a6b7fa8923f0",
       "adaptation": null
     },
     {
@@ -1131,13 +1068,6 @@
       "sourceSha256": "195068c0fe22ce38bcf4cc04e3dc98988e4f25eb22a5ad01da9c9b7c3d7f4746",
       "publishedSha256": "195068c0fe22ce38bcf4cc04e3dc98988e4f25eb22a5ad01da9c9b7c3d7f4746",
       "adaptation": null
-    },
-    {
-      "path": "NFSMWEventLoader/src/NFSMWEventLoader.vcxproj",
-      "bytes": 3401,
-      "sourceSha256": "cceab62ebc9dc5681e08350b962f793b6452a89836af4168db6c88530e54a3c1",
-      "publishedSha256": "3be81622d3dd18b135dec33f22725a06044e9020e070950f7437520394e892ea",
-      "adaptation": "Replace private D3DX location with overridable D3DXRoot; runtime sources unchanged."
     },
     {
       "path": "NFSMWEventLoader/src/OpponentAppearanceSafety.inl",
@@ -1309,9 +1239,9 @@
     },
     {
       "path": "NFSMWEventLoader/src/Runtime.cpp",
-      "bytes": 46553,
-      "sourceSha256": "98f8f4a4e33b7bbd5abdadd6ac9ee3fdba229ec80a12150ae82a2b5a4fe3760d",
-      "publishedSha256": "98f8f4a4e33b7bbd5abdadd6ac9ee3fdba229ec80a12150ae82a2b5a4fe3760d",
+      "bytes": 46292,
+      "sourceSha256": "f326b56fb0add5cd92510a9db6cabfc51965ae465a3225f0f6078080b6950425",
+      "publishedSha256": "f326b56fb0add5cd92510a9db6cabfc51965ae465a3225f0f6078080b6950425",
       "adaptation": null
     },
     {
@@ -1331,8 +1261,8 @@
     {
       "path": "NFSMWEventLoader/src/UpdateNotice.h",
       "bytes": 258,
-      "sourceSha256": "0c27c8982e431e8f0e598e9f2dac3fcb7c3f90be6f61d2b6dba872a7a86f8e39",
-      "publishedSha256": "0c27c8982e431e8f0e598e9f2dac3fcb7c3f90be6f61d2b6dba872a7a86f8e39",
+      "sourceSha256": "d869658ba871d242ce3b5da07be9c58d0ed11c474ba920abbb815cbc1ca36823",
+      "publishedSha256": "d869658ba871d242ce3b5da07be9c58d0ed11c474ba920abbb815cbc1ca36823",
       "adaptation": null
     },
     {
@@ -1350,6 +1280,13 @@
       "adaptation": null
     },
     {
+      "path": "NFSMWEventLoader/tests/NativeCollisionBuild.vcxproj",
+      "bytes": 1376,
+      "sourceSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
+      "publishedSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
+      "adaptation": null
+    },
+    {
       "path": "NFSMWEventLoader/tests/map_resource_identity.cpp",
       "bytes": 639,
       "sourceSha256": "b021a7070fa1335a49f72b4e52802ff2ca40afa2996daaf6cca1a28483924c8f",
@@ -1361,13 +1298,6 @@
       "bytes": 3017,
       "sourceSha256": "2093e5be6584689a0a82629cab42fbe35b5be56ad85717ab936cbbd0ca74178d",
       "publishedSha256": "2093e5be6584689a0a82629cab42fbe35b5be56ad85717ab936cbbd0ca74178d",
-      "adaptation": null
-    },
-    {
-      "path": "NFSMWEventLoader/tests/NativeCollisionBuild.vcxproj",
-      "bytes": 1376,
-      "sourceSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
-      "publishedSha256": "85c907118c957c794f6c5c0aa0f9fb95b42bf80b577e10c3ad58da3184ef6b66",
       "adaptation": null
     },
     {
@@ -1470,9 +1400,9 @@
     },
     {
       "path": "NFSMWHudLifecycleFix/NFSMWHudLifecycleFix.ini",
-      "bytes": 24,
-      "sourceSha256": "e89905c14d5e930ac82bdeff2a0e17dbc61c0eeabb0df74436e29861b9e2a63a",
-      "publishedSha256": "e89905c14d5e930ac82bdeff2a0e17dbc61c0eeabb0df74436e29861b9e2a63a",
+      "bytes": 1149,
+      "sourceSha256": "84ae749c14e6916e0c4ca083b5013acbed0fb9591b410b596f896e9c0744b311",
+      "publishedSha256": "84ae749c14e6916e0c4ca083b5013acbed0fb9591b410b596f896e9c0744b311",
       "adaptation": null
     },
     {
@@ -1525,17 +1455,17 @@
       "adaptation": null
     },
     {
-      "path": "NFSMWHudLifecycleFix/third_party/minhook/include/MinHook.h",
-      "bytes": 7715,
-      "sourceSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
-      "publishedSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
-      "adaptation": null
-    },
-    {
       "path": "NFSMWHudLifecycleFix/third_party/minhook/LICENSE.txt",
       "bytes": 4446,
       "sourceSha256": "4f21f857550d7be854da6ea5f2da4e6775ca4e3fbb535e4f3d961c47d0bf3335",
       "publishedSha256": "4f21f857550d7be854da6ea5f2da4e6775ca4e3fbb535e4f3d961c47d0bf3335",
+      "adaptation": null
+    },
+    {
+      "path": "NFSMWHudLifecycleFix/third_party/minhook/include/MinHook.h",
+      "bytes": 7715,
+      "sourceSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
+      "publishedSha256": "c3608e584bd9659aebdbb4c8c82585605989193623f240552d35c43311b3d31a",
       "adaptation": null
     },
     {
@@ -1600,6 +1530,97 @@
       "sourceSha256": "23681f7768d5dbd23ea14b45ba64e488a337501f23122253c532b05dbed4b85f",
       "publishedSha256": "23681f7768d5dbd23ea14b45ba64e488a337501f23122253c532b05dbed4b85f",
       "adaptation": null
+    },
+    {
+      "path": "integration/AppearanceSafety.h",
+      "bytes": 1359,
+      "sourceSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
+      "publishedSha256": "4453b7678a53afebf88b1bd50ca6c1820fe6266bd45471bec383a43c1dacd8fa",
+      "adaptation": null
+    },
+    {
+      "path": "integration/EventLoaderPaths.h",
+      "bytes": 691,
+      "sourceSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
+      "publishedSha256": "4fb00b8436f4445af98b9bf8c3b9f90650838bc1919d05bac7b1b760c448ad52",
+      "adaptation": null
+    },
+    {
+      "path": "integration/InstalledCarType.h",
+      "bytes": 1066,
+      "sourceSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
+      "publishedSha256": "eee0eb3414bd3a988520300a6097e18983bef1b04a4744ed1883743abcba1fd2",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWBarrierSpatialIndex.h",
+      "bytes": 2132,
+      "sourceSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
+      "publishedSha256": "0a9bd60e23afde873834beda8362af983e046ffc5d0040fd70e6b62f70e8bf79",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCheckpointRuntime.h",
+      "bytes": 3901,
+      "sourceSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
+      "publishedSha256": "7f44a5358790ec6d2b527644d80209bcb98c2dc08baf4fd6093c0cc05dbf8636",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCheckpointRuntimeApi.h",
+      "bytes": 256,
+      "sourceSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
+      "publishedSha256": "04c719d04a985d0c29f909c45af36fe29ba891bc647704a68008a4dfb3c3c5c0",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWCombatContract.h",
+      "bytes": 4169,
+      "sourceSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
+      "publishedSha256": "505d4122e1b42c52dc3f44e66fee2e2c13d8d474edb1d5fbef6e73d61bffe474",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWEventGeometryApi.h",
+      "bytes": 1054,
+      "sourceSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
+      "publishedSha256": "b6e5c44db2d5f1d8d59974a2f4573f4e73e93228eb6961e1141321a32fd25b73",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWEventSceneApi.h",
+      "bytes": 326,
+      "sourceSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
+      "publishedSha256": "75d24035dd726a1ffdba8804bc86cbdcb53731772b0e310f5f3c34fbc5a4e37a",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWNativeSpeechPolicy.h",
+      "bytes": 560,
+      "sourceSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
+      "publishedSha256": "84043a3a18feed4a0b76af7ab4e7a60fd78d7d822ced01c8889c41890aa99d2c",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWNeoObstacles.h",
+      "bytes": 562,
+      "sourceSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
+      "publishedSha256": "2d8d47705c382ab9c1b7eed98b277ef4b05081d03eaa4e0207e7bf5228c1b8ab",
+      "adaptation": null
+    },
+    {
+      "path": "integration/MWRaceBarrierPolicy.h",
+      "bytes": 1984,
+      "sourceSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
+      "publishedSha256": "e2bc4ec9d3262e923814f25506e7e3914e127f72536760301ff0e546b5662913",
+      "adaptation": null
+    },
+    {
+      "path": "integration/NativeFloatMath.h",
+      "bytes": 950,
+      "sourceSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
+      "publishedSha256": "7930bdccc86594a5fc12aa364ef3c6d27ffd922238dc274189fe13d11e28abef",
+      "adaptation": null
     }
   ],
   "standaloneBuild": {
@@ -1607,5 +1628,5 @@
     "EventLoader": false,
     "reason": "Full Event Loader compilation requires external NFRR dependencies and unpublished World2MW headers."
   },
-  "version": "1.0.1 Hotfix"
+  "version": "1.0.2"
 }

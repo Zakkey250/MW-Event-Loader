@@ -566,6 +566,7 @@ bool MWELCarbonStartPose(float* pose,const float* source){
  }catch(...){return false;}
  return MWELCarbonNativeStartPose(pose,source);
 }
+#include "CarbonIntroPose.h"
 bool MWELCarbonNativeStartPose(float* pose,const float* source){
  // Ordinary eight-car races: preserve the native player's staged position.
  // The adapter uses its actual body pose rather than a W2C-specific location.
@@ -576,11 +577,7 @@ bool MWELCarbonNativeStartPose(float* pose,const float* source){
   if(!list||count>128)return false;
   for(unsigned i=0;i<count;++i)if(list[i]&&*reinterpret_cast<unsigned*>(list[i])==0x8AA828&&*reinterpret_cast<unsigned*>(list[i]-0x78)==handle){
    NeoBodyMotion body{};if(!NeoReadBody(list[i],body))return false;
-   const float radians=std::atan2(-body.heading[0],body.heading[2])-std::atan2(source[4],source[5]);
-   const float x=source[12],y=source[13];
-   pose[0]=body.position[2]-(x*std::cos(radians)-y*std::sin(radians));
-   pose[1]=-body.position[0]-(x*std::sin(radians)+y*std::cos(radians));
-   pose[2]=body.position[1];pose[3]=radians*180.f/3.141592654f+90.f;return true;
+   return mwel_carbon::NativeStartPose(pose,source,body.position,body.heading);
   }
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
  return false;

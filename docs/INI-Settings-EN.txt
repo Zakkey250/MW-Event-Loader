@@ -1,0 +1,33 @@
+MW Event Loader 1.0.2 — INI settings
+
+All 99 shipped settings have Japanese and English comments directly above
+their entries. Values and existing defaults are preserved. Newly listed
+settings use the same defaults already used by the runtime.
+
+Configuration locations:
+  scripts/EventLoader/EventLoader.ini       Event Loader (25 settings)
+  scripts/MWArmsAssist.ini                  ArmsAssist (73 settings)
+  scripts/NFSMWHudLifecycleFix.ini          HUD Lifecycle Fix (1 setting)
+
+Restart the game after editing. Switches use 0=off / 1=on; use a period as
+the decimal separator. Keep the section headers and key names unchanged.
+Each comment lists its unit, supported range or choices where applicable.
+
+Updating an existing installation:
+  Keep your current INIs, event folders, Profiles and converted cutscenes.
+  Replace the ASI files. Compare the new INIs with your own and copy only
+  the settings you want to add. Do not overwrite personal settings merely
+  to obtain the new comments. Back up files before editing.
+
+The Event Loader INI is inside scripts/EventLoader, not the game root.
+Event-specific health, weapons, ammunition and checkpoints belong in the
+editor. An editor ammunition override takes priority for that weapon;
+unspecified weapons use ArmsAssist's INI. Police ON alone does not enable
+armed modes. Player loadout remains controlled by MWArsenal/ReplaceWeapon.
+
+Normally leave all diagnostic options at 0. HUD Lifecycle Fix works
+automatically and has no extra layout switches. Internal, marker-gated
+development settings are not shipped as user options. The obsolete
+MaxTargetSpeedKmh option is ignored.
+
+See the comments in each supplied INI for the complete setting reference.

@@ -2,15 +2,18 @@
 
 [日本語](README.ja.md) · [Event Editor](https://zakkey250.github.io/MW-Event-Editor/) · [All releases](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
-> **1.0.1 Hotfix was rebuilt on October 25, 2026.** Download the replacement ZIP if you saved an earlier copy. The rebuilt ArmsAssist and the final ZIP passed local Microsoft Defender scans with security intelligence **1.461.194.0**. The earlier ArmsAssist detection is under Microsoft review; these local results are not a Microsoft clearance or a guarantee for every security product. Checksums and scan details are provided with the release.
+
+> **1.0.2 Hotfix:** Fixes reversed starts when additional cutscenes are used in native events. All 99 shipped INI settings now include Japanese and English comments. Keep your existing INIs when updating.
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader 1.0.1 Hotfix — rebuilt package](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.1) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader 1.0.2 Hotfix](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.2) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.
 
+
+INI settings: [English](docs/INI-Settings-EN.txt) · [日本語](docs/INI-Settings-JA.txt)
 
 ## Overview
 
