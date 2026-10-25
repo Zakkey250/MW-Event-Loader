@@ -44,7 +44,7 @@ int main(int argc,char** argv){
  expect(!ShowSerializedNotice(GetModuleHandleW(nullptr),L"Suppressed",L"",L"OK",+[]()noexcept{return false;},100,100),"no dialog during gameplay");
  if(argc>1&&std::string_view(argv[1])=="--live"){
   std::string payload;expect(event_loader_update::FetchReleases(payload),"real GitHub read-only HTTPS succeeds");
-  if(!payload.empty()){auto eligible=FindUpdate(payload,"0.0.0",repo,prefix);std::cout<<"LIVE loader="<<(eligible?eligible->tag:"none")<<'\n';expect(!FindUpdate(payload,"1.0.0",repo,prefix),"same published release is not a newer update");}
+  if(!payload.empty()){auto eligible=FindUpdate(payload,"0.0.0",repo,prefix);std::cout<<"LIVE loader="<<(eligible?eligible->tag:"none")<<'\n';expect(!FindUpdate(payload,event_loader_update::Version,repo,prefix),"same published release is not a newer update");}
  }
  if(argc>1&&std::string_view(argv[1])=="--dialog"){
   expect(ShowSerializedNotice(GetModuleHandleW(nullptr),L"MW Event Loader — 更新通知テスト",L"新しいバージョンが公開されています。\r\n現在: 1.0.0\r\n公開版: v1.0.2\r\nテスト表示。ダウンロードは行いません。",L"閉じて続行",nullptr,500,800),"Japanese dialog auto-closes");

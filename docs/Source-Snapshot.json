@@ -1386,9 +1386,9 @@
     },
     {
       "path": "NFSMWEventLoader/tests/update_notice.cpp",
-      "bytes": 6184,
-      "sourceSha256": "836fde900ac5bf4b1d708a3906a8e086e428de591c01f2f0e5715d85a0304141",
-      "publishedSha256": "836fde900ac5bf4b1d708a3906a8e086e428de591c01f2f0e5715d85a0304141",
+      "bytes": 6205,
+      "sourceSha256": "232e5e19d7b8b68a105db58bd031ebb24c6e65136cce95352069c8062dbb8a9c",
+      "publishedSha256": "232e5e19d7b8b68a105db58bd031ebb24c6e65136cce95352069c8062dbb8a9c",
       "adaptation": null
     },
     {
