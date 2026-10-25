@@ -183,6 +183,7 @@ Do not upload your game files or the editor’s extracted cache as part of an ev
 
 ## Folder Layout
 
+```text
 Game folder (containing speed.exe)/
 |-- speed.exe
 |-- dinput8.dll                         Example ASI loader; installed separately
@@ -218,6 +219,7 @@ Game folder (containing speed.exe)/
     |-- MWArsenal.asi                  Installed separately
     |-- MWArsenalAssets/               Follow the author's instructions
     `-- healthbars.asi                 Optional; supported setups only
+```
 
 This example shows a full installation; third-party mods are not included in the package. The main package, event ZIPs and locally converted cutscene ZIPs are separate. Diagnostic logging is off by default.
 
