@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include "LeaderboardPhase.h"
 // Clone the installation's native FEng objects; never enlarge or index past
 // the native LeaderBoard's four-entry arrays. The FE package owns all clones.
 namespace expanded_leaderboard {
@@ -42,7 +43,7 @@ inline Object Clone(Object package,Object source,unsigned key){
  return copy;
 }
 struct Row {Object name=nullptr,rank=nullptr,back=nullptr;char text[96]{};bool rankWritten=false;};
-struct State {Object package=nullptr;void* board=nullptr;std::array<Row,16> rows{};char packageName[64]{};bool ready=false;unsigned error=0;float step=0;unsigned attempts=0,phase=0,mode=0;};
+struct State {Object package=nullptr;void* board=nullptr;std::array<Row,16> rows{};char packageName[64]{};bool ready=false;unsigned error=0;float step=0;unsigned attempts=0,phase=0,mode=0;LeaderboardPhase display;};
 inline State state;
 inline unsigned RowKey(unsigned row,unsigned part){char key[48];sprintf_s(key,"MWEL_Leaderboard_%u_%u",row,part);return Hash(key);}
 inline bool FeaturesVisible(void* board,unsigned long long features){return (Read<unsigned long long>(board,0x18)&features)!=0;}
@@ -104,9 +105,9 @@ inline unsigned PlayerSlot(void* player,BYTE* race,unsigned count){
  return 0;
 }
 inline void Text(Object object,const char* text){reinterpret_cast<void(__cdecl*)(void*,const char*,...)>(0x515D70)(object,"%s",text);}
-inline void Format(char(&text)[96],BYTE* race,BYTE* info,unsigned slot,unsigned playerSlot,unsigned mode,bool metric,bool values){
- if(!values){auto name=Read<const char*>(info,8);for(unsigned j=0;name&&j<sizeof(text)-1;++j){text[j]=Read<char>(name,j);if(!text[j])break;}if(!text[0])sprintf_s(text,"Racer %u",slot+1);return;}
- if(combatActive&&combatActive()){
+inline void Format(char(&text)[96],BYTE* race,BYTE* info,unsigned slot,unsigned playerSlot,unsigned mode,bool metric,unsigned phase){
+ if(!phase){auto name=Read<const char*>(info,8);for(unsigned j=0;name&&j<sizeof(text)-1;++j){text[j]=Read<char>(name,j);if(!text[j])break;}if(!text[0])sprintf_s(text,"Racer %u",slot+1);return;}
+ if(phase==1&&combatActive&&combatActive()){
   float hp=0,maximum=0;
   if(combatHealth&&combatHealth(slot,Read<unsigned>(info),hp,maximum)&&maximum>0)sprintf_s(text,"HP %.0f%%",double(std::clamp(hp/maximum*100.f,0.f,100.f)));
   else strcpy_s(text,"HP --%");return;
@@ -144,7 +145,8 @@ inline void Update(void* board,void* player){
  auto rank=[&](unsigned slot){auto value=Read<unsigned>(race+0x18+slot*0x194,0x10);return value&&value<=count?value:count+slot+1;};
  std::sort(order.begin(),order.begin()+count,[&](unsigned a,unsigned b){auto x=rank(a),y=rank(b);return x!=y?x<y:a<b;});
  auto params=Read<void*>(race,0x1968);unsigned mode=params?reinterpret_cast<unsigned(__thiscall*)(void*)>(0x5FAA20)(params):0;
- bool values=Read<BYTE>(board,0x22C)!=0;state.phase=values;state.mode=mode;
+ bool values=Read<BYTE>(board,0x22C)!=0;state.mode=mode;
+ state.phase=state.display.Observe(mode==5&&combatActive&&combatActive(),values);
  auto profile=Read<void*>(reinterpret_cast<void*>(0x91CF90));auto settings=Read<void*>(profile,0x10);bool metric=Read<BYTE>(settings,0x3B)!=0;
  unsigned playerSlot=PlayerSlot(player,race,count);
  // Reuse the evaluated native fade/flip, retaining each clone's translation.
@@ -160,7 +162,7 @@ inline void Update(void* board,void* player){
  for(unsigned i=0;i<16;++i){auto row=state.rows[i];bool visible=i<count;
   Show(row.name,visible);Show(row.rank,visible);Show(row.back,visible);if(!visible)continue;
   unsigned slot=order[i];auto info=race+0x18+slot*0x194;char text[96]{};
-  Format(text,race,info,slot,playerSlot,mode,metric,values);
+  Format(text,race,info,slot,playerSlot,mode,metric,state.phase);
   // Native Update rewrites its four rows. Extra rows are owned by this
   // adapter, so identical text need not allocate/rebuild every render tick.
   auto& cached=state.rows[i];

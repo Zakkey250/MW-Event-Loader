@@ -158,7 +158,7 @@ inline void AtomicWrite(const fs::path& destination,const std::string& bytes){
  CloseHandle(file);if(ok)ok=MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
  if(!ok){DeleteFileW(temporary.c_str());throw std::runtime_error("Sidecar commit failed");}
 }
-struct FinishEvidence {bool nativeGoalCrossed=false,forcedRaceEnd=false;unsigned place=0;double elapsedSeconds=0,score=0;};
+struct FinishEvidence {bool nativeGoalCrossed=false,forcedRaceEnd=false;unsigned place=0;double elapsedSeconds=0,score=0;bool armsSurvivalVictory=false;};
 class ProfileSidecar {
  fs::path path;std::string profileKey;Json records=Json::object();
  public:
@@ -171,14 +171,18 @@ class ProfileSidecar {
    records=saved.at("records");if(!records.is_object())throw std::runtime_error("Sidecar records");}
  }
  bool Record(const EventPackage& event,const FinishEvidence& finish){
-  if(!EventId(event.id)||!event.revision||!finish.nativeGoalCrossed||finish.forcedRaceEnd||finish.place<1||finish.place>16||
+  const bool survival=finish.armsSurvivalVictory&&event.authoring.value("combatMode",std::string("none"))=="armsrace"&&finish.place==1;
+  if(!EventId(event.id)||!event.revision||(!finish.nativeGoalCrossed&&!survival)||finish.forcedRaceEnd||finish.place<1||finish.place>16||
      !std::isfinite(finish.elapsedSeconds)||finish.elapsedSeconds<=0||!std::isfinite(finish.score)||finish.score<0)return false;
   auto candidate=records;auto key=event.id+":"+std::to_string(event.revision);auto& row=candidate[key];
   if(row.is_null())row=Json::object();
-  if(!row.contains("attempts")){row["attempts"]=0;row["wins"]=0;row["bestSeconds"]=finish.elapsedSeconds;row["bestScore"]=finish.score;}
+  if(!row.contains("attempts")){row["attempts"]=0;row["wins"]=0;}
   row["attempts"]=row.at("attempts").get<uint64_t>()+1;row["wins"]=row.at("wins").get<uint64_t>()+(finish.place==1||event.authoring.value("combatMode",std::string("none"))=="hotpursuit");
-  row["bestSeconds"]=std::min(row.at("bestSeconds").get<double>(),finish.elapsedSeconds);
-  row["bestScore"]=std::max(row.at("bestScore").get<double>(),finish.score);
+  if(survival){row["survivalWins"]=row.value("survivalWins",uint64_t(0))+1;row["lastSurvivalSeconds"]=finish.elapsedSeconds;}
+  else{
+   row["bestSeconds"]=std::min(row.value("bestSeconds",finish.elapsedSeconds),finish.elapsedSeconds);
+   row["bestScore"]=std::max(row.value("bestScore",finish.score),finish.score);
+  }
   Json saved{{"schema",1},{"profileKeyHash",Digest(profileKey)},{"records",candidate},{"payloadSha256",Digest(candidate.dump())}};
   AtomicWrite(path,saved.dump()+"\n");records=std::move(candidate);return true;
  }

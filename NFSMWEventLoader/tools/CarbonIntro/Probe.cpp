@@ -94,11 +94,41 @@ unsigned nativeNisDepth=0;bool pendingSceneBegin=false;void* retainedIntroRace=n
 #ifdef MWEL_CARBON_RUNTIME
 std::atomic<bool> nativeCallbacksReady{false};
 #endif
-void CancelStagedScene(){pendingSceneBegin=false;scene.Cancel();}
-void BeginStagedScene(){auto race=*reinterpret_cast<BYTE**>(0x91E000);if(race&&retainedIntroRace==race){Log("SCENE_NATIVE_FALLBACK original_intro_already_played=1 double_playback_prevented=1");return;}if(!race||!SelectVariant(*reinterpret_cast<unsigned*>(race+0x1958))){Log("SCENE_NATIVE_FALLBACK participants_mismatch_or_disabled=1");return;}scene.Begin();if(scene.playing){if(logging){char info[240];sprintf_s(info,"SCENE_BEGIN variant=%s participants=%u native_staging=1 source_camera=1 native_NIS_cars=1",scene.variantName.c_str(),scene.assets.participants);Log(info);}}else Log("SCENE_REFUSED native_NIS_bind_or_pose_failed=1");if(logging){char text[160];sprintf_s(text,"SCENE_BIND error=%u slot=%u table=%08X applied=%u",scene.error,scene.errorSlot,scene.errorTable,scene.applied);Log(text);}}
+void CancelStagedScene(bool raceBoundary=false){pendingSceneBegin=false;scene.Cancel();if(raceBoundary)retainedIntroRace=nullptr;}
+bool PrepareNativeStageVariant(unsigned participants){
+#ifdef MWEL_CARBON_RUNTIME
+ if(MWELCarbonUsesAuthoredPose())return true;
+ const auto valid=[&](){
+  auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float pose[4]{};
+  if(!MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source)))return false;
+  scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();
+  return scene.ValidateStartRoad();
+ };
+ if(valid()){Log("SCENE_FINAL_GRID_PREFLIGHT passed=1 all_cars_unmodified=1");return true;}
+ if(strcmp(MWELCarbonSelection(),"auto")!=0){Log("SCENE_NATIVE_FALLBACK selected_scene_final_grid_unsupported=1 all_cars_unmodified=1");return false;}
+ // Draw uniformly from the alternatives that fit the actual native grid.
+ // No per-car stage, actor relocation or camera transform is introduced.
+ std::vector<size_t> candidates;
+ for(size_t i=0;i<variants.size();++i){
+  if(!variants[i].runtime->enabled||variants[i].runtime->assets.participants!=participants)continue;
+  std::swap(scene,*variants[i].runtime);renderer.swap(variants[i].draw);
+  if(valid())candidates.push_back(i);
+  std::swap(scene,*variants[i].runtime);renderer.swap(variants[i].draw);
+ }
+ if(candidates.empty()){Log("SCENE_NATIVE_FALLBACK no_scene_fits_final_grid=1 all_cars_unmodified=1");return false;}
+ static std::mt19937 random(GetTickCount()^GetCurrentProcessId());
+ const auto choice=candidates[std::uniform_int_distribution<size_t>(0,candidates.size()-1)(random)];
+ std::swap(scene,*variants[choice].runtime);renderer.swap(variants[choice].draw);
+ Log("SCENE_FINAL_GRID_PREFLIGHT selected_compatible_alternative=1 all_cars_unmodified=1");
+ return true;
+#else
+ return true;
+#endif
+}
+void BeginStagedScene(){auto race=*reinterpret_cast<BYTE**>(0x91E000);if(race&&retainedIntroRace==race){Log("SCENE_NATIVE_FALLBACK original_intro_already_played=1 double_playback_prevented=1");return;}if(!race||!SelectVariant(*reinterpret_cast<unsigned*>(race+0x1958))){Log("SCENE_NATIVE_FALLBACK participants_mismatch_or_disabled=1");return;}if(!PrepareNativeStageVariant(*reinterpret_cast<unsigned*>(race+0x1958)))return;scene.Begin();if(scene.playing){if(logging){char info[240];sprintf_s(info,"SCENE_BEGIN variant=%s participants=%u native_staging=1 source_camera=1 native_NIS_cars=1",scene.variantName.c_str(),scene.assets.participants);Log(info);}}else Log("SCENE_REFUSED native_NIS_bind_or_pose_failed=1");if(logging){char text[160];sprintf_s(text,"SCENE_BIND error=%u slot=%u table=%08X applied=%u",scene.error,scene.errorSlot,scene.errorTable,scene.applied);Log(text);}}
 void __cdecl Stage(bool value){State("staging",value);if(value)CancelStagedScene();else pendingSceneBegin=false;stageOriginal(value);if(value){if(nativeNisDepth){pendingSceneBegin=true;Log("SCENE_BEGIN_DEFERRED native_NIS_cleanup_in_progress=1");}else BeginStagedScene();}}
 void __cdecl Done(){pendingSceneBegin=false;State("countdown_done",1);if(scene.playing){if(logging){char text[160];sprintf_s(text,"SCENE_GO_TIMING elapsed=%.4f target=%.4f",scene.elapsed,scene.goAt);Log(text);}scene.Release();Log("SCENE_GO native_callback=1 cars_unbound=1");}doneOriginal();}
-void __fastcall Active(void* self,void*,bool value){State("active",value);if(!value)CancelStagedScene();activeOriginal(self,value);}
+void __fastcall Active(void* self,void*,bool value){State("active",value);if(!value)CancelStagedScene(true);activeOriginal(self,value);}
 void(__thiscall* nisPlayOriginal)(void*);
 void(__thiscall* hudFeaturesOriginal)(void*,unsigned long long);
 void __fastcall HudFeatures(void* self,void*,unsigned long long features){
@@ -124,16 +154,22 @@ void __fastcall NisPlay(void* self,void*){
  if(replace)for(unsigned i=0;i<scene.assets.participants;i++)if(!scene.FindVehicle(*reinterpret_cast<unsigned*>(r+0x18+i*0x194)))replace=false;
 #ifdef MWEL_CARBON_RUNTIME
  if(replace){auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float pose[4]{};replace=MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source));
-  if(replace){scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();replace=scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
+  if(replace){if(logging){char note[240];sprintf_s(note,"SCENE_PREFLIGHT_POSE origin=%.5f,%.5f,%.5f heading=%.5f",pose[0],pose[1],pose[2],pose[3]);Log(note);}scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();replace=scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
  }
 #endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME
  if(replace&&!PrepareSceneTorch()){replace=false;Log("SCENE_NATIVE_FALLBACK torch_preparation_failed=1");}
 #endif
- if(logging){char text[160];sprintf_s(text,"NATIVE_NIS_PLAY type=%u scene=%08X state=%u replace=%u",*reinterpret_cast<unsigned*>(n+0x2FC),*reinterpret_cast<unsigned*>(n+0x394),*reinterpret_cast<unsigned*>(n+0x2F4),unsigned(replace));Log(text);}
+ if(logging){char text[256];sprintf_s(text,"NATIVE_NIS_PLAY type=%u scene=%08X state=%u replace=%u participants=%u ordinary=%u requested_source=%u previous_playing=%u",*reinterpret_cast<unsigned*>(n+0x2FC),*reinterpret_cast<unsigned*>(n+0x394),*reinterpret_cast<unsigned*>(n+0x2F4),unsigned(replace),r?*reinterpret_cast<unsigned*>(r+0x1958):0,unsigned(ordinary),unsigned(requestedSource),unsigned(scene.playing));Log(text);}
  retainedIntroRace=replace?nullptr:r;
+#ifdef MWEL_CARBON_RUNTIME
+ MWELCarbonGridSnapshot("native_play_before");
+#endif
  ++nativeNisDepth;
  nisPlayOriginal(self);
+#ifdef MWEL_CARBON_RUNTIME
+ if(replace&&logging){auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float observed[4]{};if(MWELCarbonStartPose(observed,reinterpret_cast<const float*>(&source))){char note[240];sprintf_s(note,"SCENE_AFTER_NATIVE_PLAY_POSE origin=%.5f,%.5f,%.5f heading=%.5f",observed[0],observed[1],observed[2],observed[3]);Log(note);}}
+#endif
  if(replace){
   // A user-selected replacement may skip a protected story START intro.
   // Use the original skip/cleanup path; restore the local restriction after
@@ -143,6 +179,9 @@ void __fastcall NisPlay(void* self,void*){
   if(requestedSource)n[0x3E8]=restricted;if(!skipped)retainedIntroRace=r;
   Log(skipped?"NATIVE_INTRO_SKIPPED completion_tags=1 native_cleanup=1":"NATIVE_INTRO_RETAINED skip_refused=1");}
  --nativeNisDepth;
+#ifdef MWEL_CARBON_RUNTIME
+ MWELCarbonGridSnapshot("native_cleanup_after");
+#endif
  // Stage can be dispatched inside Play/Skip before AnimatedCars_UnBind has
  // finished. Acquire Carbon's car controls only after that native cleanup.
  if(!nativeNisDepth&&pendingSceneBegin){pendingSceneBegin=false;BeginStagedScene();}

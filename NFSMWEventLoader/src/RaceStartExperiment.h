@@ -316,6 +316,13 @@ void ObserveFrameUnsafe(){
   if(!completedGoalObserved&&(genuineGoals&1)&&!forcedEstimationObserved){
    const auto place=Read<unsigned>(race,0x28);
    if(place>1&&place<=8){completedGoalObserved=true;completedGoalPlace=place;
+    // Only the explicit completed-transition lab fixture owns this autopilot.
+    // Game_ForceAIControl(false) still enables AI; it selects the first player.
+    // Restore human input via the separately verified Game_ClearAIControl.
+    const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
+    if(memcmp(reinterpret_cast<void*>(0x612420),guard,sizeof(guard))){aborted=true;Log("EXPERIMENT_RACE_ABORT native_player_clear_controller_guard");return;}
+    reinterpret_cast<void(__cdecl*)(bool)>(0x612420)(false);
+    Log("EXPERIMENT_COMPLETED_PLAYER_AI_CLEARED genuine_goal=1 input_restored=1 result_and_rank_unmodified=1");
     Log("EXPERIMENT_COMPLETED_TRANSITION_GOAL actual_place=%u genuine_goal=1 native_finish_unmodified=1",place);}
   }
   if(completedGoalObserved&&!radarRoamingEntered&&Read<unsigned>(race,0x1960)==0&&Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6){
@@ -345,7 +352,10 @@ void ObserveFrameUnsafe(){
   const mwel::EventPackage* next=nullptr;for(const auto& p:packages)if(p.id==nextId)next=&p;
   if(!next){aborted=true;return;}customTransitionInvoked=true;
   for(auto& motion:motions)motion={};firstDriving=0;
-  auto eventId=reinterpret_cast<unsigned(__cdecl*)(const char*)>(0x4519D0)(next->nativeEventId.c_str());
+  // A native-baseline sequence must stay on original events after roaming,
+  // rather than silently switching to its unrelated package descriptor.
+  const auto nextEvent=nativeBaseline?next->authoring.at("eventId").get<std::string>():next->nativeEventId;
+  auto eventId=reinterpret_cast<unsigned(__cdecl*)(const char*)>(0x4519D0)(nextEvent.c_str());
   ++transitionCount;
   Log("EXPERIMENT_CUSTOM_TRANSITION_ACTIVATE event=%08X id=%s native_roaming_confirmed=1 cycle=%u limit=%u",eventId,next->id.c_str(),transitionCount,transitionLimit);
   reinterpret_cast<void(__thiscall*)(void*,unsigned)>(0x5FDCB0)(race,eventId);
@@ -403,7 +413,7 @@ void BootstrapSelection(const std::string& event){
  *reinterpret_cast<unsigned*>(0x926064)=1;*reinterpret_cast<char*>(0x926068)='1';
 }
 std::string BaselineSelection(){
- const auto& authoring=packages.front().authoring;
+ const auto& authoring=BootstrapPackage().authoring;
  return authoring.at("eventId").get<std::string>();
 }
 void PrimeBootstrap(){

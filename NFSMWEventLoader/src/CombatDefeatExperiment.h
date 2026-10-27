@@ -2,24 +2,68 @@
 // Explicit isolated-lab integration stimulus. This tests the real native loss
 // event/script/menu path; it is not evidence of six physical weapon contacts.
 namespace combat_defeat_experiment {
-bool enabled=false,visual=false,arrest=false,visualPlayerReleased=false;unsigned epoch=0,hits=0,stage=0,epochs=0;ULONGLONG next=0,visualBegan=0;unsigned visualStage=99;
+bool enabled=false,visual=false,arrest=false,survival=false,visualPlayerReleased=false;unsigned survivalScenario=0,epoch=0,hits=0,stage=0,epochs=0;ULONGLONG next=0,visualBegan=0;unsigned visualStage=99;
 void Configure(){
+#ifdef MWEL_ARMS_FRONTEND_STIMULUS
+ // Private validation binary only; never part of the handoff candidate.
+ if(productionRuntime){
+  const auto validation=game/L"MWEventLoader.runtime-validation-test",autopilot=game/L"MWEventLoader.career-autodrive-test";
+  if(!mwel::fs::exists(validation)||!mwel::fs::exists(autopilot)||mwel::Read(validation,128)!="MW_EVENT_LOADER_RUNTIME_VALIDATION_V1\n"||mwel::Read(autopilot,128)!="MW_EVENT_LOADER_CAREER_AUTODRIVE_V1\n")return;
+ }
+#else
  if(productionRuntime)return;
+#endif
  auto marker=game/L"MWEventLoader.combat-defeat-test";
  const auto text=mwel::fs::exists(marker)?mwel::Read(marker,128):std::string();
  visual=text=="MW_EVENT_LOADER_COMBAT_VISUAL_V1\n";
  arrest=text=="MW_EVENT_LOADER_GAUNTLET_ARREST_V1\n";
- enabled=visual||arrest||text=="MW_EVENT_LOADER_COMBAT_DEFEAT_V1\n";
+ survivalScenario=text=="MW_EVENT_LOADER_ARMS_SURVIVAL_V1\n"?1:text=="MW_EVENT_LOADER_ARMS_SURVIVAL_LOSS_V1\n"?2:text=="MW_EVENT_LOADER_ARMS_SURVIVAL_WAIT_V1\n"?3:0;
+ survival=survivalScenario!=0;
+ enabled=visual||arrest||survival||text=="MW_EVENT_LOADER_COMBAT_DEFEAT_V1\n";
 }
 void Frame(){
+ if(enabled&&survival&&hits&&!visualPlayerReleased&&!combat_health_runtime::Racing()){
+  // Only the explicit lab owns player autopilot. Release it at the result
+  // boundary so the real result/retry UI can receive Computer Use input.
+  const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
+  if(!memcmp(reinterpret_cast<void*>(0x612420),guard,sizeof(guard))){
+   reinterpret_cast<void(__cdecl*)(bool)>(0x612420)(false);visualPlayerReleased=true;
+   Log("EXPERIMENT_ARMS_SURVIVAL_INPUT_RESTORED result_boundary=1 production_disabled=1");
+  }
+ }
  if(!enabled||!combat_health_runtime::ledger.event)return;
  using namespace combat_health_runtime;
  unsigned race=0;BYTE staging=0,racing=0;
  if(!Read(0x91E000,race)||!Read(race+0x198A,staging)||!Read(race+0x1978,racing)||!staging||!racing)return;
- if(epoch!=generation){epoch=generation;hits=stage=0;visualBegan=GetTickCount64();visualStage=99;visualPlayerReleased=false;next=visualBegan+12000;++epochs;
+ if(epoch!=generation){epoch=generation;hits=stage=0;visualBegan=GetTickCount64();visualStage=99;visualPlayerReleased=false;next=visualBegan+12000;
+#ifdef MWEL_ARMS_FRONTEND_STIMULUS
+  if(productionRuntime&&survival)next=visualBegan+4000;
+#endif
+  ++epochs;
   auto package=event_race_policies::Current();if(!visual&&package&&package->authoring.value("combatMode",std::string("none"))=="gauntlet")stage=1;
   Log("EXPERIMENT_COMBAT_DEFEAT_EPOCH epoch=%u iteration=%u retry_stimulus_disabled=%u",epoch,epochs,unsigned(epochs>1));}
- if(epochs>1)return;
+ if(epochs>(survival?2u:1u))return;
+ if(survival){
+  auto package=event_race_policies::Current();
+  if(!package||package->authoring.value("combatMode",std::string("none"))!="armsrace"||hits>=(survivalScenario==3?2u:1u)||GetTickCount64()<next)return;
+  unsigned count=0;if(!Read(race+0x1958,count)||count<2||count>16)return;
+  for(unsigned i=0;i<count;++i){const auto b=bindings[i];
+   if(!b.damage||!Participant(i,b.handle)||!Native(b.damage,b.handle))return;
+  }
+  ++hits;
+  if(package->authoring.value("mode",std::string())=="speedtraprace"){
+   // Explicit score-order stress, not claimed physical speed-trap crossings.
+   // Preserve a higher AI score to test survival priority over native score.
+   for(unsigned i=0;i<count;++i)*reinterpret_cast<float*>(race+0x18+i*0x194+0x120)=float(i*1000+10);
+   Log("EXPERIMENT_ARMS_SCORE_STRESS artificial_scores=1 AI_scores_above_player=1 physical_speedtrap_crossings=0");
+  }
+  Log("EXPERIMENT_ARMS_SURVIVAL_STIMULUS count=%u artificial_hp=1 physical_weapon_contact=0 native_destroy=1",count);
+  const auto limit=survivalScenario==3&&hits==1?count-1:count;
+  for(unsigned i=1;i<limit;++i){ledger.racers[i].remaining=0;ledger.racers[i].retired=true;Retire(i);}
+  if(survivalScenario==2){ledger.racers[0].remaining=0;ledger.racers[0].retired=true;Retire(0);}
+  if(survivalScenario==3&&hits==1){next=GetTickCount64()+10000;Log("EXPERIMENT_ARMS_SURVIVAL_WAIT final_AI_alive=1 hold_seconds=10");}
+  return;
+ }
  if(arrest){
   auto package=event_race_policies::Current();if(!package||package->authoring.value("combatMode",std::string("none"))!="gauntlet"||GetTickCount64()-visualBegan<6000)return;
   if(!visualPlayerReleased){

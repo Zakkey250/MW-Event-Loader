@@ -3,11 +3,11 @@
 [English](README.md) · [イベントエディタ](https://zakkey250.github.io/MW-Event-Editor/) · [リリース一覧](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.0.2 Hotfix:** 純正イベントで追加カットシーンを使った際の逆向きスタートを修正しました。同梱INIの全99項目に日英の説明を追加しています。更新時は既存INIを保存してください。
+> **1.0.3:** アームズレースの生存勝利、純正イベントの開始配置、UG2の合図とGOを修正しました。変換済みカットシーンの再変換は不要です。[更新内容](docs/Release-Notes-1.0.3.md)
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader 1.0.2 Hotfix](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.2) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.0.3](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.3) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。

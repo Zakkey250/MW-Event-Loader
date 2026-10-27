@@ -3,11 +3,11 @@
 [日本語](README.ja.md) · [Event Editor](https://zakkey250.github.io/MW-Event-Editor/) · [All releases](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.0.2 Hotfix:** Fixes reversed starts when additional cutscenes are used in native events. All 99 shipped INI settings now include Japanese and English comments. Keep your existing INIs when updating.
+> **1.0.3:** Adds last-survivor Arms Race victories and fixes native-event start placement and UG2 GO gestures. Existing cutscenes need no reconversion. [Release notes](docs/Release-Notes-1.0.3.md)
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader 1.0.2 Hotfix](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.2) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader 1.0.3](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.3) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.

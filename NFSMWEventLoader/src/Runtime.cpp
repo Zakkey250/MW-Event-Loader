@@ -1,5 +1,6 @@
 #include "EventCore.h"
 #include "UpdateNotice.h"
+#include "SceneGestureTiming.h"
 #include "PackageSelection.h"
 #include "WorldCompatibility.h"
 #include "NativeCashValue.h"
@@ -96,7 +97,7 @@ void MWELCombatNewGeneration();
 void MWELCombatRaceExit();
 bool MWELHotPursuitEscaping(unsigned);
 void MWELHotPursuitFinish(void*,bool,bool,int,void(__cdecl*)(void*));
-bool MWELHotPursuitResultPending();
+bool MWELCombatResultPending();
 bool MWELCombatRetired(unsigned,unsigned);
 void MWELLabProductionFinish(void*,void(__cdecl*)(void*));
 void MWELLabProductionEnd(void*,void(__thiscall*)(void*));
@@ -131,7 +132,29 @@ bool MWELGauntletParticipant(unsigned,unsigned);
 #include "HotPursuitController.h"
 #include "CombatPursuitLifecycle.h"
 #include "HotPursuitFinish.h"
-bool MWELHotPursuitResultPending(){return hot_pursuit_finish::WinningResult();}
+int MWELArmsNativeSlot(void* actor){return reinterpret_cast<int(__cdecl*)(void*)>(0x60DAE0)(actor);}
+using MWELArmsPlacementFn=void(__cdecl*)(void*,void*,unsigned);
+MWELArmsPlacementFn MWELArmsNativePlacement(){
+ if(hot_pursuit_finish::installed)return hot_pursuit_finish::originalPlacement;
+ const BYTE expected[]={0x83,0xEC,0x20,0x8B,0x54,0x24,0x24};
+ if(memcmp(reinterpret_cast<void*>(0x60AA00),expected,sizeof(expected)))return nullptr;
+ return reinterpret_cast<MWELArmsPlacementFn>(0x60AA00);
+}
+#include "ArmsSurvival.h"
+void(__thiscall* armsOriginalRanking)(void*)=nullptr;
+void __fastcall ArmsRanking(void* self,void*){
+ armsOriginalRanking(self);arms_survival_runtime::WinningRanks(unsigned(self));
+}
+bool MWELArmsPrepareRanking(){
+ static bool installed=false,refused=false;if(installed)return true;if(refused)return false;
+ static_assert(offsetof(NFSPluginSDK::MW05::GRacerInfo,mTotalled)==0x1D);
+ const BYTE expected[]={0x83,0xEC,0x4C,0x53,0x56,0x57,0x8B,0xF9};
+ auto site=reinterpret_cast<void*>(0x5FDE80);
+ if(memcmp(site,expected,sizeof(expected))||MH_CreateHook(site,ArmsRanking,reinterpret_cast<void**>(&armsOriginalRanking))!=MH_OK){refused=true;Log("ARMS_SURVIVAL_REFUSED native_ranking_owner=1");return false;}
+ if(MH_EnableHook(site)!=MH_OK){MH_RemoveHook(site);armsOriginalRanking=nullptr;refused=true;Log("ARMS_SURVIVAL_REFUSED native_ranking_enable=1");return false;}
+ installed=true;return true;
+}
+bool MWELCombatResultPending(){return hot_pursuit_finish::WinningResult()||arms_survival_runtime::ResultPending();}
 #include "HotPursuitRegeneration.h"
 #include "GauntletPursuit.h"
 #include "GauntletHud.h"
@@ -147,6 +170,7 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_GauntletV1(){return gaunt
 #include "CombatDefeatExperiment.h"
 bool MWELCombatVisualHeld(unsigned slot){return !productionRuntime&&slot==0&&combat_defeat_experiment::enabled&&combat_defeat_experiment::epochs==1&&((combat_defeat_experiment::visual&&GetTickCount64()-combat_defeat_experiment::visualBegan>=12000)||(combat_defeat_experiment::arrest&&combat_defeat_experiment::visualPlayerReleased));}
 void MWELCombatNewGeneration(){
+ arms_survival_runtime::Reset();
  hot_pursuit_finish::Reset();
  hot_pursuit_runtime::Reset();gauntlet_runtime::Reset();combat_visuals::Reset();combat_markers::Reset();
  combat_health_runtime::NewGeneration();
@@ -418,6 +442,7 @@ extern "C" __declspec(dllexport) void __cdecl MWEL_FrameV1(){
   combat_pursuit_lifecycle::BeforeFrame();
   gauntlet_runtime::Frame();hot_pursuit_finish::Frame();hot_pursuit_runtime::Frame();hot_pursuit_radar::Frame();gauntlet_hud::Frame();
   combat_health_runtime::Frame();
+  arms_survival_runtime::Frame();
   combat_visuals::Frame();combat_markers::Frame();
   combat_defeat_experiment::Frame();
   runtime_lifecycle::Frame();checkpoint_display::Tick();
@@ -527,6 +552,19 @@ bool MWELNeoCourseFile(unsigned key,const char* suffix,char* output,unsigned siz
  }return false;
 }
 bool MWELNeoSettingsFile(char* output,unsigned size){auto path=mwel_paths::Settings(game).string();if(!output||path.size()>=size)return false;memcpy(output,path.c_str(),path.size()+1);return true;}
+float MWELCarbonGestureGo(const char* folder,unsigned count,float tail,float go,float end){
+ const auto clip=scene_gesture_timing::Identify(count,tail,go,end);
+ if(clip==scene_gesture_timing::Clip::None||!folder)return go;
+ try{
+  const mwel::fs::path base(folder);
+  const auto character=mwel::Digest(mwel::Read(base/L"character.cni",8*1024*1024));
+  const auto clock=mwel::Digest(mwel::Read(base/L"actor-clock.bin",128*1024));
+  const auto second=clip==scene_gesture_timing::Clip::Paired?mwel::Digest(mwel::Read(base/L"prop-3DAE5F2D.cni",8*1024*1024)):std::string();
+  const auto adjusted=scene_gesture_timing::Correct(clip,go,character,clock,second);
+  if(adjusted!=go)Log("SCENE_GESTURE_CUE_ADAPTED original=%.6f corrected=%.6f verified_motion_identity=1",go,adjusted);
+  return adjusted;
+ }catch(...){return go;}
+}
 bool MWELCarbonNativeStartPose(float* pose,const float* source);
 void* __cdecl MWELCarbonOriginalCollection(unsigned classKey,unsigned key){return registration_experiment::findCollection?registration_experiment::findCollection(classKey,key):nullptr;}
 const char* MWELCarbonSelection(){
@@ -552,6 +590,9 @@ bool MWELCarbonReplaceSourceIntro(unsigned sceneKey){
   auto story=reinterpret_cast<BYTE*(__thiscall*)(void*,unsigned,unsigned)>(0x454190)(source,registration_experiment::Hash("DDayRace"),0);BYTE flag=0;return story&&Copy(story,&flag,1)&&flag==1;
  }catch(...){return false;}
 }
+bool MWELCarbonUsesAuthoredPose(){
+ try{auto clone=registration_experiment::Find(MWELNeoCurrentKey());return clone&&clone->race;}catch(...){return false;}
+}
 bool MWELCarbonStartPose(float* pose,const float* source){
  if(!pose)return false;
  try{
@@ -567,20 +608,45 @@ bool MWELCarbonStartPose(float* pose,const float* source){
  return MWELCarbonNativeStartPose(pose,source);
 }
 #include "CarbonIntroPose.h"
-bool MWELCarbonNativeStartPose(float* pose,const float* source){
- // Ordinary eight-car races: preserve the native player's staged position.
- // The adapter uses its actual body pose rather than a W2C-specific location.
+bool MWELCarbonNativeMarkerPose(float* pose){
+ using namespace registration_experiment;
+ if(!pose||!getCollection)return false;
+ const auto attribute=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x454190);
+ auto race=race_start_experiment::Read<BYTE*>(reinterpret_cast<void*>(0x91E000));
+ auto parameters=race_start_experiment::Read<BYTE*>(race,0x1968);
+ auto instance=race_start_experiment::Read<BYTE*>(parameters,8);
+ auto collection=race_start_experiment::Read<Collection*>(instance,4);Collection value{};
+ if(!collection||!Copy(collection,&value,sizeof(value))||!value.klass)return false;
+ unsigned key=0;auto reference=attribute(collection,Hash("racestart"),0);
+ if(!reference||!Copy(reference,&key,sizeof(key))||!key)return false;
+ auto marker=getCollection(value.klass,key);if(!marker)return false;
+ float result[4]{};auto position=attribute(marker,Hash("Position"),0),rotation=attribute(marker,Hash("Rotation"),0);
+ if(!position||!rotation||!Copy(position,result,12)||!Copy(rotation,result+3,4))return false;
+ if(!mwel_carbon::StartMarkerPose(pose,result,result+3))return false;
+ if(worldLogEnabled)Log("SCENE_NATIVE_MARKER_POSE collection=%08X marker=%08X pose=%.6f,%.6f,%.6f,%.6f",value.key,key,result[0],result[1],result[2],result[3]);
+ return true;
+}
+void MWELCarbonGridSnapshot(const char* boundary){
+ if(!worldLogEnabled)return;
  __try{
-  auto race=*reinterpret_cast<BYTE**>(0x91E000);if(!race||!source||*reinterpret_cast<unsigned*>(race+0x1958)<1||*reinterpret_cast<unsigned*>(race+0x1958)>8)return false;
-  unsigned handle=*reinterpret_cast<unsigned*>(race+0x18);
-  auto list=*reinterpret_cast<BYTE***>(0x92CD1C);auto count=*reinterpret_cast<unsigned*>(0x92CD24);
-  if(!list||count>128)return false;
-  for(unsigned i=0;i<count;++i)if(list[i]&&*reinterpret_cast<unsigned*>(list[i])==0x8AA828&&*reinterpret_cast<unsigned*>(list[i]-0x78)==handle){
-   NeoBodyMotion body{};if(!NeoReadBody(list[i],body))return false;
-   return mwel_carbon::NativeStartPose(pose,source,body.position,body.heading);
+  auto race=*reinterpret_cast<BYTE**>(0x91E000);if(!race)return;
+  auto count=*reinterpret_cast<unsigned*>(race+0x1958);
+  auto list=*reinterpret_cast<BYTE***>(0x92CD1C);auto vehicles=*reinterpret_cast<unsigned*>(0x92CD24);
+  if(!list||count>8||vehicles>128)return;
+  for(unsigned slot=0;slot<count;++slot){
+   auto handle=*reinterpret_cast<unsigned*>(race+0x18+slot*0x194);
+   for(unsigned i=0;i<vehicles;++i)if(list[i]&&*reinterpret_cast<unsigned*>(list[i])==0x8AA828&&*reinterpret_cast<unsigned*>(list[i]-0x78)==handle){
+    NeoBodyMotion body{};if(NeoReadBody(list[i],body))Log("SCENE_GRID_SNAPSHOT boundary=%s slot=%u handle=%u position=%.6f,%.6f,%.6f forward=%.6f,%.6f,%.6f",boundary,slot,handle,body.position[0],body.position[1],body.position[2],body.heading[0],body.heading[1],body.heading[2]);
+    break;
+   }
   }
- }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
- return false;
+ }__except(EXCEPTION_EXECUTE_HANDLER){Log("SCENE_GRID_SNAPSHOT_UNAVAILABLE boundary=%s",boundary);}
+}
+bool MWELCarbonNativeStartPose(float* pose,const float*){
+ // Native and untouched exported events share the same racestart marker.
+ // A racer's body is an animated grid slot, not the scene's AnimLocator.
+ // Never reconstruct that locator from one car or shift individual actors.
+ return MWELCarbonNativeMarkerPose(pose);
 }
 bool MWELNeoDifficultySample(unsigned handle,mwel_difficulty::RaceSample& sample){
  sample={};auto race=runtime_lifecycle::Read<BYTE*>(reinterpret_cast<void*>(0x91E000));
@@ -618,3 +684,4 @@ bool MWELNeoGate(unsigned key,unsigned leg,float* center,float* dimensions,float
   if(!target)return false;auto p=target->at("position"),d=target->at("dimensions");center[0]=-p.at(1).get<float>();center[1]=p.at(2).get<float>();center[2]=p.at(0).get<float>();for(unsigned i=0;i<3;++i)dimensions[i]=d.at(i).get<float>();*rotation=target->at("rotation").get<float>();return true;
  }return false;
 }
+

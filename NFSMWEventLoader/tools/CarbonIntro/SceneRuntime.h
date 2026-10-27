@@ -11,7 +11,7 @@ struct SceneRuntime {
  float begun=0,elapsed=0,last=0;unsigned generation=0;D3DXMATRIX world{},stage{};
  SceneAssets assets;SceneWave audio;SceneEngineRevs engineRevs;std::string variantName,assetFolder;D3DXVECTOR3 origin{};float heading=0;D3DXMATRIX actorLocator{};
  std::vector<D3DXVECTOR3> roots;float groundOffset=0,cameraLift=0;
- BYTE* vehicles[8]{};void* controls[8]{};unsigned handles[8]{};bool bound=false;unsigned applied=0;
+ BYTE* vehicles[8]{};void* owners[8]{};bool acquired[8]{};void* controls[8]{};unsigned handles[8]{};bool bound=false;unsigned applied=0;
  unsigned error=0,errorSlot=0,errorTable=0;bool awaitingCars=false;float carsWaitStarted=0;
  unsigned readyHandles[8]{};BYTE* readyVehicles[8]{};void* readyOwners[8]{};float readySince=-1;
  float waitTraceAt=-1;
@@ -48,7 +48,11 @@ struct SceneRuntime {
   if(timing){unsigned h[2];float t[3];SceneAssets::Read(timing,h,2);SceneAssets::Read(timing,t,3);
    const float countdownOverlap=3.f; // Timing belongs to the pack, not its folder name.
    if(h[0]!=0x31544943||h[1]!=assets.participants||!std::isfinite(t[0])||!std::isfinite(t[1])||!std::isfinite(t[2])||t[0]<0||t[1]<=3||t[0]>=t[1]-3+countdownOverlap||t[1]>=t[2]||t[2]>assets.duration+.01f)throw std::runtime_error("Invalid scene timing");
-   cameraTailAt=t[0];goAt=t[1];countdownAt=goAt-3;hideAt=t[2];
+   cameraTailAt=t[0];goAt=t[1];hideAt=t[2];
+#ifdef MWEL_CARBON_RUNTIME
+   goAt=MWELCarbonGestureGo(folder.c_str(),assets.participants,cameraTailAt,goAt,hideAt);
+#endif
+   countdownAt=goAt-3;
   }else if(assets.participants!=8)throw std::runtime_error("Variant timing required");
   // Reveal at the last authored blackout before countdown, not at the first
   // camera cut. Clips without that fade retain native countdown visibility.
@@ -121,17 +125,33 @@ struct SceneRuntime {
 #endif
  }
  void StopRevs(){
-  for(unsigned i=0;i<assets.participants;i++)if(vehicles[i]&&FindVehicle(handles[i])==vehicles[i])engineRevs.Stop(i,*reinterpret_cast<void**>(vehicles[i]+4));
+  for(unsigned i=0;i<assets.participants;i++)if(vehicles[i]&&FindVehicle(handles[i])==vehicles[i]&&*reinterpret_cast<void**>(vehicles[i]+4)==owners[i])engineRevs.Stop(i,*reinterpret_cast<void**>(vehicles[i]+4));
   engineRevs.Forget();
+ }
+ void* LiveControl(BYTE* vehicle)const{
+  auto owner=vehicle?*reinterpret_cast<void**>(vehicle+4):nullptr;
+  auto live=owner?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(owner,0x445650):nullptr;
+#ifdef MWEL_SCENE_BINDING_PROOF
+  return MWELSceneBindingProofControl(vehicle,live,generation,elapsed);
+#else
+  return live;
+#endif
  }
  void Unbind(){
   StopRevs();
   if(!bound)return;
-  for(unsigned i=0;i<assets.participants;i++)if(vehicles[i]&&FindVehicle(handles[i])==vehicles[i]){
+  for(unsigned i=0;i<assets.participants;i++)if(acquired[i]&&vehicles[i]&&FindVehicle(handles[i])==vehicles[i]){
    auto owner=*reinterpret_cast<void**>(vehicles[i]+4);
-   auto live=owner?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(owner,0x445650):nullptr;
+   if(owner!=owners[i])continue; // A recycled vehicle belongs to the new native owner.
+   auto live=LiveControl(vehicles[i]);
    if(controls[i]&&live==controls[i]&&ValidControl(live)){reinterpret_cast<void(__thiscall*)(void*,float)>(0x6AE0D0)(live,0);reinterpret_cast<void(__thiscall*)(void*)>(0x6A0100)(live);}
-   reinterpret_cast<void(__thiscall*)(void*,bool)>(0x686410)(vehicles[i],false);
+   // Release only our acquired spline (or its retired tail). A different live
+   // control belongs to a subsequent native bind and must remain untouched.
+   if(live==controls[i]||!ValidControl(live))reinterpret_cast<void(__thiscall*)(void*,bool)>(0x686410)(vehicles[i],false);
+#ifdef MWEL_SCENE_BINDING_PROOF
+   if(!vehicles[i][0xB0])MWELSceneBindingProofReleased(vehicles[i]);
+#endif
+   acquired[i]=false;
   }
   bound=false;
  }
@@ -145,7 +165,7 @@ struct SceneRuntime {
   }
  }
  void RestoreView(){if(lensOwned){*reinterpret_cast<unsigned short*>(0x986870+0xC4)=savedFov;lensOwned=false;}RestoreHud();}
- void ClearVehicles(bool preserveReadiness=false){for(unsigned i=0;i<8;++i){vehicles[i]=nullptr;controls[i]=nullptr;handles[i]=0;if(!preserveReadiness){readyHandles[i]=0;readyVehicles[i]=nullptr;readyOwners[i]=nullptr;}}bound=false;if(!preserveReadiness)readySince=-1;}
+ void ClearVehicles(bool preserveReadiness=false){for(unsigned i=0;i<8;++i){vehicles[i]=nullptr;owners[i]=nullptr;acquired[i]=false;controls[i]=nullptr;handles[i]=0;if(!preserveReadiness){readyHandles[i]=0;readyVehicles[i]=nullptr;readyOwners[i]=nullptr;}}bound=false;if(!preserveReadiness)readySince=-1;}
  void Cancel(){
   audio.Stop();
   sceneCrowd.Clear();
@@ -186,10 +206,12 @@ struct SceneRuntime {
   // Observing the whole field across simulation ticks lets native teardown
   // finish before installing Carbon's suspension behaviors.
   const float now=*reinterpret_cast<float*>(0x9885D8);bool changed=false;
+  if(!std::isfinite(now)||!race||*reinterpret_cast<unsigned*>(race+0x1958)!=assets.participants){readySince=-1;return false;}
   for(unsigned i=0;i<assets.participants;++i){
    errorSlot=i;auto handle=*reinterpret_cast<unsigned*>(race+0x18+i*0x194);auto vehicle=FindVehicle(handle);
    if(!handle||!vehicle){readySince=-1;return false;}
    auto owner=*reinterpret_cast<void**>(vehicle+4);if(!owner){readySince=-1;return false;}
+   for(unsigned j=0;j<i;++j)if(readyHandles[j]==handle||readyVehicles[j]==vehicle||readyOwners[j]==owner){readySince=-1;return false;}
    changed=changed||readyHandles[i]!=handle||readyVehicles[i]!=vehicle||readyOwners[i]!=owner;
    readyHandles[i]=handle;readyVehicles[i]=vehicle;readyOwners[i]=owner;
   }
@@ -200,14 +222,15 @@ struct SceneRuntime {
   // Restart dispatches staging before all replacement opponents have entered
   // the live vehicle list. Do not partially change their behaviors.
   if(!FieldStable())return false;
-  for(unsigned i=0;i<assets.participants;i++){vehicles[i]=nullptr;controls[i]=nullptr;handles[i]=0;}bound=true;
+  for(unsigned i=0;i<assets.participants;i++){vehicles[i]=nullptr;owners[i]=nullptr;acquired[i]=false;controls[i]=nullptr;handles[i]=0;}bound=true;
   for(unsigned i=0;i<assets.participants;i++){
    errorSlot=i;handles[i]=*reinterpret_cast<unsigned*>(race+0x18+i*0x194);vehicles[i]=FindVehicle(handles[i]);if(!vehicles[i]){error=1;return false;}
    // SetAnimating installs the native SuspensionSpline behavior and its
    // INISCarControl interface; ordinary driving does not expose it.
-   reinterpret_cast<void(__thiscall*)(void*,bool)>(0x686410)(vehicles[i],true);
-   auto owner=*reinterpret_cast<void**>(vehicles[i]+4);if(!owner){error=2;return false;}
-   controls[i]=reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(owner,0x445650);
+   owners[i]=*reinterpret_cast<void**>(vehicles[i]+4);if(!owners[i]){error=2;return false;}
+   reinterpret_cast<void(__thiscall*)(void*,bool)>(0x686410)(vehicles[i],true);acquired[i]=true;
+   auto owner=*reinterpret_cast<void**>(vehicles[i]+4);if(owner!=owners[i]){error=2;return false;}
+   controls[i]=LiveControl(vehicles[i]);
    errorTable=controls[i]?*reinterpret_cast<unsigned*>(controls[i]):0;
    if(!ValidControl(controls[i])){error=3;return false;}
   }
@@ -223,20 +246,24 @@ struct SceneRuntime {
    errorSlot=i;
    if(!vehicles[i]||FindVehicle(handles[i])!=vehicles[i]){error=7;TraceCancel("vehicle_changed_waiting");Unbind();ClearVehicles();awaitingCars=true;return;}
    auto owner=*reinterpret_cast<void**>(vehicles[i]+4);
-   auto live=owner?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(owner,0x445650):nullptr;
+   if(owner!=owners[i]){error=2;Unbind();ClearVehicles();awaitingCars=true;return;}
+   auto live=LiveControl(vehicles[i]);
    if(!ValidControl(live)&&!vehicles[i][0xB0]){
     renewed[i]=true;
     // A late native NIS UnBind retired its spline. This scene still owns
     // staging; install a fresh spline instead of touching the retired tail.
     reinterpret_cast<void(__thiscall*)(void*,bool)>(0x686410)(vehicles[i],true);
     owner=*reinterpret_cast<void**>(vehicles[i]+4);
-    live=owner?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(owner,0x445650):nullptr;
+    live=LiveControl(vehicles[i]);
    }
    if(!ValidControl(live)){
 #ifdef MWEL_CARBON_RUNTIME
     if(logging&&error!=8){char note[256];sprintf_s(note,"SCENE_CONTROL_PENDING slot=%u handle=%u vehicle=%p old=%p live=%p parent_table=%08X animating=%u elapsed=%.5f",i,handles[i],vehicles[i],controls[i],live,ControlHead(live),unsigned(vehicles[i][0xB0]),elapsed);MWELNeoLog(note);}
 #endif
-    StopRevs();error=8;awaitingCars=true;return;
+    // Re-enter the complete-field acquisition path. Leaving bound=true here
+    // skipped Bind forever, so an animating flag with a retired control could
+    // freeze the camera until the ten-second fallback released countdown.
+    error=8;Unbind();ClearVehicles();awaitingCars=true;return;
    }
    renewed[i]=renewed[i]||live!=controls[i];controls[i]=live;
   }
@@ -266,7 +293,7 @@ struct SceneRuntime {
     ok=reinterpret_cast<bool(__thiscall*)(void*,const D3DXMATRIX*,bool,float)>(0x691110)(controls[i],&physical,false,dt);
     if(ok&&logging&&!applied){char note[160];sprintf_s(note,"SCENE_NATIVE_WARP_RECOVERED slot=%u exact_body_sync=1 verified_road=1",i);MWELNeoLog(note);}
    }
-   if(!ok){error=4;errorSlot=i;TraceCancel("native_position_rejected");Cancel();return;}
+   if(!ok){if(logging){char note[300];sprintf_s(note,"SCENE_POSITION_REJECTED slot=%u grounded=%u source_clock=%.5f map=%.5f,%.5f,%.5f physical=%.5f,%.5f,%.5f stage=%.5f,%.5f,%.5f",i,unsigned(grounded),assets.ActorTime(elapsed),render._41,render._42,render._43,physical._41,physical._42,physical._43,stage._41,stage._42,stage._43);Log(note);}error=4;errorSlot=i;TraceCancel("native_position_rejected");Cancel();return;}
    if(!skipped&&elapsed<countdownAt)engineRevs.Apply(i,*reinterpret_cast<void**>(vehicles[i]+4),elapsed);
    if(grounded){
     // SetNISPosition deliberately retains live vertical physics after its
@@ -301,6 +328,7 @@ struct SceneRuntime {
 #ifdef MWEL_CARBON_RUNTIME
   auto source=assets.Car(0,assets.ActorTime(goAt));float pose[4]{};if(!MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source))){error=5;return;}
   origin={pose[0],pose[1],pose[2]};heading=pose[3];SetStage();
+  if(!MWELCarbonUsesAuthoredPose()&&!ValidateStartRoad()){error=10;Log("SCENE_NATIVE_FALLBACK final_pose_changed_before_bind=1 all_cars_unmodified=1");return;}
   if(logging){char note[200];sprintf_s(note,"SCENE_STAGE_POSE origin=%.3f,%.3f,%.3f heading=%.3f source0=%.3f,%.3f,%.3f",origin.x,origin.y,origin.z,heading,source._41,source._42,source._43);MWELNeoLog(note);}
 #endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME

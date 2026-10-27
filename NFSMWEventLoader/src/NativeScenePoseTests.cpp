@@ -1,6 +1,5 @@
 #include <Windows.h>
 #include "CarbonIntroPose.h"
-#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -12,46 +11,37 @@
 static unsigned checks=0;
 static void Check(bool ok,const char* what){++checks;if(!ok)throw std::runtime_error(what);}
 using Matrix=std::array<float,16>;
-static Matrix Source(float angle){
- const float a=angle*3.141592654f/180.f,c=std::cos(a),s=std::sin(a);
- return {c,s,0,0,-s,c,0,0,0,0,1,0,17,-23,2,1};
-}
-static Matrix Place(Matrix source,const float* pose){
- const float a=(pose[3]-90)*3.141592654f/180.f,c=std::cos(a),s=std::sin(a);
- Matrix result=source;
- for(unsigned row=0;row<4;++row){result[row*4]=source[row*4]*c-source[row*4+1]*s;
-  result[row*4+1]=source[row*4]*s+source[row*4+1]*c;}
- result[12]+=pose[0];result[13]+=pose[1];result[14]+=pose[2];return result;
-}
 int main(int argc,char** argv){try{
- Check(argc==2,"supply the verified EN1.3 EXE");
+ Check(argc==2,"supply verified EN1.3 EXE");
  std::ifstream file(argv[1],std::ios::binary);std::vector<unsigned char> exe((std::istreambuf_iterator<char>(file)),{});
  constexpr unsigned offset=0x5E1A0,bytes=0x9B;
- Check(exe.size()==6029312&&exe[offset]==0x83&&exe[offset+bytes-1]==0xC3,"native conversion body unavailable");
- // Exact EN1.3 render-to-physics conversion, copied without any relative calls.
- auto memory=VirtualAlloc(nullptr,bytes,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);Check(memory!=nullptr,"allocate native conversion fixture");
- std::memcpy(memory,exe.data()+offset,bytes);DWORD old=0;
- Check(VirtualProtect(memory,bytes,PAGE_EXECUTE_READ,&old)!=0,"seal native conversion fixture");
+ Check(exe.size()==6029312&&exe[offset]==0x83&&exe[offset+bytes-1]==0xC3,"native conversion unavailable");
+ auto memory=VirtualAlloc(nullptr,bytes,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);Check(memory!=nullptr,"allocate conversion fixture");
+ memcpy(memory,exe.data()+offset,bytes);DWORD old=0;Check(VirtualProtect(memory,bytes,PAGE_EXECUTE_READ,&old)!=0,"seal fixture");
  FlushInstructionCache(GetCurrentProcess(),memory,bytes);
  auto convert=reinterpret_cast<void(__cdecl*)(float*,const float*)>(memory);
- const float position[]={125,34,-819};
- for(float sceneAngle:{90.f,-90.f,0.f,180.f,37.f,-123.f})for(float bodyAngle:{0.f,90.f,-90.f,180.f,23.f,-148.f}){
-  auto source=Source(sceneAngle);const float a=bodyAngle*3.141592654f/180.f;
-  const float heading[]={-std::sin(a),0,std::cos(a)};float pose[4]{};
-  Check(mwel_carbon::NativeStartPose(pose,source.data(),position,heading),"valid scene pose rejected");
-  auto render=Place(source,pose);Matrix physical{};convert(physical.data(),render.data());
-  // Native conversion places the car's forward axis in physical row 2.
-  const float dot=physical[8]*heading[0]+physical[10]*heading[2];
-  if(dot<.9999f)std::printf("DIRECTION_MISMATCH scene_angle=%.1f body_angle=%.1f forward_dot=%.6f\n",sceneAngle,bodyAngle,dot);
-  Check(dot>.9999f,"scene release reverses or rotates the native start heading");
-  Check(std::abs(physical[12]-position[0])<.001f&&std::abs(physical[14]-position[2])<.001f,"scene release shifts native horizontal start position");
+ constexpr float pi=3.141592654f;
+ for(float yaw:{-180.f,-90.f,0.f,37.f,90.f,158.f,360.f}){
+  const float position[]={1980.25f,737.125f,113.5f};float pose[4]{};
+  Check(mwel_carbon::StartMarkerPose(pose,position,&yaw),"valid marker refused");
+  Check(memcmp(pose,position,12)==0&&memcmp(pose+3,&yaw,4)==0,"native marker must retain exact exported values");
+  const float angle=(pose[3]-90)*pi/180,c=std::cos(angle),s=std::sin(angle);
+  for(float sourceYaw:{-180.f,-90.f,0.f,37.f,90.f,158.f})for(float x:{-12.f,0.f,12.f}){
+   const float a=sourceYaw*pi/180,sc=std::cos(a),ss=std::sin(a);Matrix m={sc,ss,0,0,-ss,sc,0,0,0,0,1,0,x,-3,0,1};
+   for(unsigned r=0;r<4;++r){float sx=m[r*4],sy=m[r*4+1];m[r*4]=sx*c-sy*s;m[r*4+1]=sx*s+sy*c;}
+   m[12]+=pose[0];m[13]+=pose[1];m[14]+=pose[2];Matrix physics{};convert(physics.data(),m.data());
+   Check(std::abs(physics[12]+m[13])<.001f&&std::abs(physics[14]-m[12])<.001f,"map marker changed physical XY placement");
+   const float actual=std::atan2(-physics[8],physics[10]),expected=std::atan2(m[1],m[0]);
+   Check(std::cos(actual-expected)>.99999f,"shared marker rotates physical heading incorrectly");
+  }
  }
- auto source=Source(90);float pose[]={11,12,13,14};const float heading[]={0,0,1};
- auto unchanged=[&](){return pose[0]==11&&pose[1]==12&&pose[2]==13&&pose[3]==14;};
- Check(!mwel_carbon::NativeStartPose(nullptr,source.data(),position,heading),"null output accepted");
- Check(!mwel_carbon::NativeStartPose(pose,nullptr,position,heading)&&unchanged(),"null source changed output");
- source[0]=source[1]=0;Check(!mwel_carbon::NativeStartPose(pose,source.data(),position,heading)&&unchanged(),"vertical source lost native fallback");
- source=Source(0);source[12]=std::numeric_limits<float>::quiet_NaN();Check(!mwel_carbon::NativeStartPose(pose,source.data(),position,heading)&&unchanged(),"invalid translation changed output");
- VirtualFree(memory,0,MEM_RELEASE);
- std::printf("PASS %u checks: native conversion preserves start direction and horizontal position across scene/body rotations; invalid inputs retain fallback\n",checks);return 0;
-}catch(const std::exception& error){std::printf("FAIL %s\n",error.what());return 1;}}
+ float position[]={1,2,3},yaw=90,pose[]={11,12,13,14};const auto unchanged=[&](){return pose[0]==11&&pose[1]==12&&pose[2]==13&&pose[3]==14;};
+ Check(!mwel_carbon::StartMarkerPose(nullptr,position,&yaw),"null output accepted");
+ Check(!mwel_carbon::StartMarkerPose(pose,nullptr,&yaw)&&unchanged(),"missing position must not mutate output");
+ Check(!mwel_carbon::StartMarkerPose(pose,position,nullptr)&&unchanged(),"missing rotation must not mutate output");
+ for(unsigned i=0;i<4;++i)for(float invalid:{std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::infinity(),100001.f}){
+  float input[]={1,2,3,90};input[i]=invalid;
+  Check(!mwel_carbon::StartMarkerPose(pose,input,input+3)&&unchanged(),"invalid marker must fail before publishing pose");
+ }
+ VirtualFree(memory,0,MEM_RELEASE);printf("PASS %u checks: exact marker values, native physical conversion, fail-closed missing/invalid attributes\n",checks);return 0;
+}catch(const std::exception& e){printf("FAIL %s\n",e.what());return 1;}}

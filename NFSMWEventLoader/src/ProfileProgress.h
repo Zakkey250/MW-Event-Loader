@@ -61,16 +61,16 @@ void RestoreNativeProgress(){
   Log("EVENT_PROGRESS_NATIVE_RESTORE profile_hash=%s records=%u original_records_preserved=1 native_save_written=0",mwel::Digest(identity).c_str(),restored);
  }catch(const std::exception& error){restorePending=false;restoredIdentity=identity;Log("EVENT_PROGRESS_RESTORE_REFUSED reason=%s",error.what());}
 }
-void Record(const mwel::EventPackage& package,void* nativeRecord,bool genuine,bool forced){
+void Record(const mwel::EventPackage& package,void* nativeRecord,bool genuine,bool forced,bool survival=false){
  using NFSPluginSDK::MW05::GRacerInfo;
  static_assert(sizeof(GRacerInfo)==0x194&&offsetof(GRacerInfo,mRaceTimer)==0x14C);
- if(!genuine||forced)return;
+ if((!genuine&&!survival)||forced)return;
  auto identity=CurrentIdentity();if(identity.empty()){Log("EVENT_PROGRESS_SKIPPED reason=no_loaded_named_profile");return;}
  GRacerInfo info{};if(!Copy(nativeRecord,&info,sizeof(info))||info.mDNF||!info.mFinishedRacing||info.mRaceTimer.mRunning)return;
  // Native Finish awards first-place rewards when mRanking == 1 (00611B11).
  // The native ranking is already one-based.
  if(info.mRanking<1||info.mRanking>16)return;
- mwel::FinishEvidence finish{genuine,forced,unsigned(info.mRanking),info.mRaceTimer.mTotalTime,std::max(0.f,info.mPointTotal)};
+ mwel::FinishEvidence finish{genuine,forced,unsigned(info.mRanking),info.mRaceTimer.mTotalTime,std::max(0.f,info.mPointTotal),survival};
  try{mwel::ProfileSidecar sidecar(mwel_paths::Profiles(game),identity);
   bool saved=sidecar.Record(package,finish);Log("EVENT_PROGRESS_SIDECAR saved=%u profile_hash=%s event=%s revision=%u place=%u native_seconds=%.6f sidecar_native_save_written=0 save_isolation_verified=0",unsigned(saved),mwel::Digest(identity).c_str(),package.id.c_str(),package.revision,finish.place,finish.elapsedSeconds);
  }catch(const std::exception& error){Log("EVENT_PROGRESS_FAILED reason=%s",error.what());}

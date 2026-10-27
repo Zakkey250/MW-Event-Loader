@@ -81,6 +81,14 @@ void FrameUnsafe(){
   // later display callback observes the exit but must not unregister CARP
   // triggers after their physical world has already been dismantled.
  }
+ // Explicit local frontend autopilot must relinquish input after native end.
+ if(careerAutodrive&&validationEnabled&&wasRunning&&!running){
+  const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
+  if(!memcmp(reinterpret_cast<void*>(0x612420),guard,sizeof(guard))){
+   reinterpret_cast<void(__cdecl*)(unsigned)>(0x612420)(0);
+   Log("EXPERIMENT_CAREER_INPUT_RESTORED native_end_observed=1 result_state_written=0");
+  }
+ }
  currentRace=race;currentKey=key;wasRunning=running;previousSeconds=seconds;
  if(running){
   // Explicit isolated frontend playtest: use native player autopilot and the
@@ -142,7 +150,7 @@ unsigned StopUnsafe(bool resultPending){
  event_maps::RestoreCalibrations();
  // Native Stop also runs while the result menu still owns a retry-capable
  // activity. That activity reuses its marker references rather than InitRacers
- // on retry. Retain this completed Hot Pursuit's objects until native roaming
+ // on retry. Retain this completed combat race's objects until native roaming
  // or world teardown, which already release the exact owner before unmount.
  if(resultPending)Log("EVENT_RUNTIME_RESULT_GEOMETRY_RETAINED key=%08X native_retry_references_live=1 release_boundary=roaming_or_world",key);
  else if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
@@ -154,7 +162,7 @@ void ReleaseCharactersUnsafe(unsigned key){
  PlayerResourceBoundary("after_owned_characters");
 }
 void __cdecl Stop(){
- const bool resultPending=MWELHotPursuitResultPending();
+ const bool resultPending=MWELCombatResultPending();
  unsigned key=0;__try{key=StopUnsafe(resultPending);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_stop_teardown_fault=%08X native_stop_retained=1",unsigned(GetExceptionCode()));}
  // An owned cleanup fault must never skip the game's simulation teardown.
  // Native exceptions remain native exceptions, rather than being swallowed.

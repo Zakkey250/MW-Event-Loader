@@ -108,6 +108,21 @@ int wmain(int argc,wchar_t** argv){
   Check(reopened.Records().at(key).at("bestSeconds")==95,"Best time did not persist");
   Check(reopened.Records().at(key).at("attempts")==2,"Rejected finishes were counted");
   Check(bob.Records().empty()&&alice.Path()!=bob.Path(),"Profile isolation failed");
+  {
+   auto survivalPackage=package;survivalPackage.revision+=100;
+   mwel::FinishEvidence survival{false,false,1,12.5,0,true};
+   survivalPackage.authoring["combatMode"]="none";
+   Check(!alice.Record(survivalPackage,survival),"Survival evidence leaked into ordinary races");
+   survivalPackage.authoring["combatMode"]="armsrace";
+   survival.place=2;Check(!alice.Record(survivalPackage,survival),"Lower rank accepted as last survivor");
+   survival.place=1;survival.forcedRaceEnd=true;Check(!alice.Record(survivalPackage,survival),"Forced end accepted as survival victory");
+   survival.forcedRaceEnd=false;Check(alice.Record(survivalPackage,survival),"Verified Arms survival win refused");
+   auto survivalKey=mwel::ProfileSidecar::Key(survivalPackage);
+   const auto& row=alice.Records().at(survivalKey);
+   Check(row.at("wins")==1&&row.at("survivalWins")==1&&!row.contains("bestSeconds"),"Survival win fabricated a finish time");
+   survival.nativeGoalCrossed=true;survival.armsSurvivalVictory=false;survival.elapsedSeconds=99;
+   Check(alice.Record(survivalPackage,survival)&&alice.Records().at(survivalKey).at("bestSeconds")==99,"Later genuine finish lost its independent course record");
+  }
   event_save::Record native{0x12345678,0x80000001,0xFFFFFFFF,0x87654321};
   if(mwel::Correction(package.authoring)){
    bool refused=false;try{reopened.SaveNativeProgress({{package,native}});}catch(...){refused=true;}
