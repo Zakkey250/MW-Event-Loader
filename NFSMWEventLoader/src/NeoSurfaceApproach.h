@@ -8,7 +8,7 @@ static bool NeoSurfaceApproach(const CollisionWorld& world,mwneo::Point body,mwn
  failure=0;mwel_grid::Launch candidate;
  if(!candidate.Initialize(body,first,second,NeoLaneExtent)){failure=1;return false;}
  RayHit prior;if(!world.Ray({body.x,body.y+1,body.z},{body.x,body.y-3,body.z},prior,true)){failure=2;return false;}
- const float clearance=std::clamp(body.y-prior.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,1.5f)+.35f;
+ const float clearance=std::clamp(body.y-prior.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,3.5f)+.35f;
  const float horizontal=std::hypot(first.x-body.x,first.z-body.z);
  std::vector<YellowRecoveryPoint> path{{{body.x,body.y,body.z},0}};
  float cursor=0;

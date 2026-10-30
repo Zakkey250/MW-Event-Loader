@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "../../integration/NativeFloatMath.h"
 #include <vector>
 #include <cmath>
 #include <cassert>

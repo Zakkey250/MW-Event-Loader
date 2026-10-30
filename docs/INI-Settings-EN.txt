@@ -1,4 +1,4 @@
-MW Event Loader 1.0.2 — INI settings
+MW Event Loader 1.1.0 — INI settings
 
 All 99 shipped settings have Japanese and English comments directly above
 their entries. Values and existing defaults are preserved. Newly listed

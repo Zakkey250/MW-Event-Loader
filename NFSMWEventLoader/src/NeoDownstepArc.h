@@ -14,7 +14,7 @@ static bool NeoDownstepArc(const CollisionWorld& world,const YellowRacingLine& l
  float curvature=2*side/square,angle=2*std::atan2(side,forward),length=fabs(curvature)>.00001f?angle/curvature:std::sqrt(square);
  if(length>160||length<2)return fail(3,goal);
  RayHit ground;if(!world.Ray({from.x,from.y+1,from.z},{from.x,from.y-3,from.z},ground,true))return fail(4,from);
- float clearance=std::clamp(from.y-ground.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,1.5f)+.35f;
+ float clearance=std::clamp(from.y-ground.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,3.5f)+.35f;
  float checked=sweepLimit>0?std::min(length,sweepLimit):length;
  Vec3 prior=from;unsigned steps=unsigned(std::ceil(checked/3));
  // The station window is identical for every sample of this arc. Determine

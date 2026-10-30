@@ -24,7 +24,7 @@ static bool NeoTerrainFlightContinuation(const CollisionWorld& world,const Yello
  if(!NeoPreviewPoint(plan,road,station,prefix))return false;
  for(float s=std::min(station+2,begin);s<=begin;){Vec3 p;if(!NeoPreviewPoint(plan,road,s,p))return false;approachPrefix+=std::hypot(p.x-prefix.x,p.z-prefix.z);prefix=p;if(s==begin)break;s=std::min(s+2,begin);}
  RayHit departure;if(!world.Ray({previous.x,previous.y+1,previous.z},{previous.x,previous.y-3,previous.z},departure,true))return false;
- const float clearance=std::clamp(previous.y-departure.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,1.5f)+.35f;
+ const float clearance=std::clamp(previous.y-departure.point.y,.15f,1.f),width=std::clamp(halfWidth,.8f,3.5f)+.35f;
  auto previousForward=mwneo::UnitXZ({nextPoint.x-previous.x,0,nextPoint.z-previous.z});
  float travelled=0,takeoffAt=0,takeoffHeight=0,takeoffSlope=0,landedAt=0,departureFloor=departure.point.y,flightSpeed=std::abs(speed),approachSeconds=0;
  if(departureMotion&&(!std::isfinite(departureMotion->speed)||departureMotion->speed<=15||!std::isfinite(departureMotion->seconds)||departureMotion->seconds<0||departureMotion->seconds>.75f))return false;
@@ -89,7 +89,7 @@ static bool NeoMeasuredFlightRange(const CollisionWorld& world,const std::vector
  const float horizontal=std::hypot(v.velocity.x,v.velocity.z);if(horizontal<=15||road.size()<2)return false;
  YellowTerrainDropScope terrain(true,48.f);
  Vec3 previous{v.position.x,v.position.y,v.position.z};
- const float hx=v.heading.x,hz=v.heading.z,width=std::clamp(v.halfWidth,.8f,1.5f)+.35f;
+ const float hx=v.heading.x,hz=v.heading.z,width=std::clamp(v.halfWidth,.8f,3.5f)+.35f;
  for(unsigned i=1;i<=60;++i){float time=i*.05f;Vec3 p{v.position.x+v.velocity.x*time,v.position.y+v.velocity.y*time-(.5f*acceleration)*time*time,v.position.z+v.velocity.z*time};
   RayHit floor;if(!world.Ray({p.x,std::max(p.y,previous.y)+1,p.z},{p.x,p.y-48,p.z},floor,true)||std::abs(floor.normal.y)<.4f)return false;
   float nearest=1e30f;Vec3 declaredPoint{};

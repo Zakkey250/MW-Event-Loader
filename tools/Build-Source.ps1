@@ -18,8 +18,8 @@ function Build-Project([string]$relativeProject, [string[]]$extraProperties = @(
     if ($LASTEXITCODE) { throw "Build failed: $relativeProject" }
 }
 if (-not $HudOnly) {
-    foreach ($required in @('NFSMWNativeFreeRoamRacers\include\LimitBreakerResourceApi.h', 'World2MW\src\NeoAI\Driver.h')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $required))) { throw 'Full Event Loader compilation requires external NFRR dependencies and unpublished World2MW headers, intentionally absent from this repository. Use -HudOnly to build HUD Lifecycle Fix; see docs/Source-Build.md.' }
+    foreach ($required in @('NFSMWNativeFreeRoamRacers\include\LimitBreakerResourceApi.h', 'World2MW\src\NeoAI\Driver.h', 'MW-Arcade-Drift-public\src\DriftModeAPI.h')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $required))) { throw 'Full Event Loader compilation requires external NFRR and MW Arcade Drift interfaces and unpublished World2MW headers, intentionally absent from this repository. Use -HudOnly to build HUD Lifecycle Fix; see docs/Source-Build.md.' }
     }
     $D3DXRoot = (Resolve-Path -LiteralPath $D3DXRoot).Path
     foreach ($required in @('build\native\include\d3dx9.h', 'build\native\release\lib\x86\d3dx9.lib')) {
@@ -33,7 +33,7 @@ if ($RunTests) {
     & (Join-Path $sourceRoot 'NFSMWHudLifecycleFix\bin\LifecycleTests.exe')
     if ($LASTEXITCODE) { throw 'HUD lifecycle tests failed.' }
     if (-not $HudOnly) {
-        foreach ($testName in @('CombatHealthTests', 'RouteProgressTests', 'PackageSelectionTests', 'DifficultyFieldTests', 'CollectionLookupCacheTests')) {
+        foreach ($testName in @('CombatHealthTests', 'RouteProgressTests', 'PackageSelectionTests', 'DifficultyFieldTests', 'CollectionLookupCacheTests', 'DriftScoreTests', 'NeoDriftTests')) {
             Build-Project "NFSMWEventLoader\src\$testName.vcxproj" @("/p:OutDir=$sourceRoot\NFSMWEventLoader\build\tests\")
             & (Join-Path $sourceRoot "NFSMWEventLoader\build\tests\$testName.exe")
             if ($LASTEXITCODE) { throw "$testName failed." }

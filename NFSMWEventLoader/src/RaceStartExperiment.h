@@ -7,6 +7,8 @@ void(__thiscall* originalDriving)(void*,float);
 bool playerSetup=false;
 bool nativeBaseline=false;
 bool neoObserver=false;
+bool manualPlayer=false;
+bool playerEngineTest=false,playerPadEngineTest=false;
 bool observerRegistered=false;
 bool radarRoamingTest=false,radarRoamingEntered=false;
 bool customTransitionTest=false,customTransitionInvoked=false;
@@ -64,6 +66,7 @@ template<class T>T Read(void* ptr,unsigned offset=0){T result{};if(ptr)Copy(stat
 #include "NativePerformanceFixture.h"
 #include "NativeGoalEvidence.h"
 void ResetObservation(){
+ RestoreObservedFinishers();
  completedDelayAt=0;
  // Native retry may reuse the same race allocation and vehicle handles. The
  // real countdown boundary also reaches this reset, not just debug bootstrap.
@@ -73,6 +76,7 @@ void ResetObservation(){
  deferredTriggers.clear();
  checkpointAuditRace=nullptr;checkpointLayoutLogged=false;
  for(auto& handle:performanceFixtureHandles)handle=0;
+ for(auto& handle:performanceAuditHandles)handle=0;
 }
 void __cdecl Start(){
  ResetObservation();
@@ -157,7 +161,7 @@ void SampleUnsafe(void* primary){
  if(delayedStart&&!completedDelayAt){
   completedDelayAt=GetTickCount64();Log("EXPERIMENT_LOWER_FINISH_START_DELAY milliseconds=8000 rank_write=0 fixture_only=1");
  }
- if(!playerSetup&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978)&&
+ if(!manualPlayer&&!playerSetup&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978)&&
     (!delayedStart||GetTickCount64()-completedDelayAt>=8000)){
   const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
   if(memcmp(reinterpret_cast<void*>(0x6123B0),guard,sizeof(guard))){Log("EXPERIMENT_RACE_ABORT native_player_controller_guard");return;}
@@ -299,6 +303,7 @@ void HoldRoamingPlayer(){
   Log("EXPERIMENT_UNLOAD_PLAYER_HOLD seconds=%.3f body_position=%.3f,%.3f,%.3f anchor=%.3f,%.3f,%.3f race_finish_claimed=0",double(now-roamingEnteredAt)/1000,motion.position[0],motion.position[1],motion.position[2],unloadPlayerAnchor[0],unloadPlayerAnchor[1],unloadPlayerAnchor[2]);}
 }
 void ObserveFrameUnsafe(){
+ RetireObservedFinishers();
  ReleaseField();
  auto race=*reinterpret_cast<BYTE**>(0x91E000);
  if(careerChainTest&&race&&Read<unsigned>(race,0x1960)==1){
@@ -417,8 +422,20 @@ std::string BaselineSelection(){
  return authoring.at("eventId").get<std::string>();
 }
 void PrimeBootstrap(){
+ if(mwel::fs::exists(game/L"MWEventLoader.player-engine-test")){
+  const auto marker=mwel::Read(game/L"MWEventLoader.player-engine-test",128);
+  playerPadEngineTest=marker=="MW_EVENT_LOADER_PLAYER_PAD_ENGINE_TEST_V1\n";
+  if(productionRuntime||!neoObserver||!mwel::fs::exists(game/L"MWEventLoader.local-test")||(!playerPadEngineTest&&marker!="MW_EVENT_LOADER_PLAYER_ENGINE_TEST_V1\n"))throw std::runtime_error("Player engine test requires the marked isolated no-save lab");
+  playerEngineTest=true;Log("EXPERIMENT_PLAYER_ENGINE_TEST native_input_autopilot=1 AI_body_correction=0 player_special_engine=1");
+ }
+ if(mwel::fs::exists(game/L"MWEventLoader.manual-player-test")){
+  if(productionRuntime||!neoObserver||!mwel::fs::exists(game/L"MWEventLoader.local-test")||mwel::Read(game/L"MWEventLoader.manual-player-test",128)!="MW_EVENT_LOADER_MANUAL_PLAYER_TEST_V1\n")throw std::runtime_error("Manual player test requires the marked isolated no-save lab");
+  manualPlayer=true;Log("EXPERIMENT_MANUAL_PLAYER native_input=1 player_autopilot=0");
+ }
  if(packages.size()!=1&&!customTransitionTest)throw std::runtime_error("exactly one package required for early bootstrap");
- performanceFixture=GetPrivateProfileIntW(L"Diagnostics",L"NativePerformanceFixture",0,mwel_paths::Settings(game).c_str())==1;
+ const auto performanceFixtureMode=GetPrivateProfileIntW(L"Diagnostics",L"NativePerformanceFixture",0,mwel_paths::Settings(game).c_str());
+ performanceFixture=performanceFixtureMode==1||performanceFixtureMode==2;
+ performanceFixtureJunkman=performanceFixtureMode==1;
  if(performanceFixture&&(productionRuntime||!neoObserver||!mwel::fs::exists(game/L"MWEventLoader.local-test")))throw std::runtime_error("Performance fixture requires isolated no-save driving");
  auto carMarker=game/L"MWEventLoader.player-car-test";
  if(mwel::fs::exists(carMarker)){

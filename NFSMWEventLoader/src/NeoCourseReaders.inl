@@ -49,8 +49,11 @@ static std::vector<std::vector<YellowBranchVariant>> yellowBranchLegs;
 #include "../../World2MW/src/NativeLoader/YellowBranchGraph.h"
 static std::vector<std::vector<YellowLocalAlternative>> yellowLocalBranchLegs;
 static bool LoadYellowBranches(unsigned hash){
- yellowBranchLegs.clear();yellowLocalBranchLegs.clear();char file[MAX_PATH];if(!CourseFile(hash,"ai-branches.bin",file,sizeof(file)))return false;
- FILE* f=nullptr;fopen_s(&f,file,"rb");if(!f)return GetFileAttributesA(file)==INVALID_FILE_ATTRIBUTES&&GetLastError()==ERROR_FILE_NOT_FOUND;
+ yellowBranchLegs.clear();yellowLocalBranchLegs.clear();char file[MAX_PATH];
+ // Exporters omit the optional branch sidecar when no branches were authored.
+ // A missing declaration is empty; a declared but unreadable file is an error.
+ if(!CourseFile(hash,"ai-branches.bin",file,sizeof(file)))return true;
+ FILE* f=nullptr;fopen_s(&f,file,"rb");if(!f)return false;
  unsigned h[4]{};bool ok=fread(h,4,4,f)==4&&h[0]==0x56423257&&(h[1]==1||h[1]==2||h[1]==3)&&h[2]==hash&&h[3]==yellowNavLegs.size();
  if(ok&&(h[1]==2||h[1]==3)){unsigned total=0;std::vector<std::vector<YellowLocalAlternative>> legs;
   for(unsigned leg=0;leg<h[3]&&ok;++leg){unsigned count=0;if(fread(&count,4,1,f)!=1||count>4096){ok=false;break;}

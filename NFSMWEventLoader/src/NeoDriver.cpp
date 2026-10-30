@@ -16,6 +16,8 @@
 #include <NFSPluginSDK/Game.MW05/Types/Attrib/Gen/pvehicle.h>
 #include <NFSPluginSDK/Game.MW05/Types/Physics.h>
 #include "DifficultySettings.h"
+#include "DriftAIClient.h"
+#include "DriftCurvePolicy.h"
 void MWELNeoLog(const char* text);
 bool MWELNeoDetailedLoggingEnabled();
 namespace event_neo_driver {
@@ -70,7 +72,21 @@ bool MWELNeoReadMotion(unsigned handle,MWELNeoMotionState& out){
   out.known=std::isfinite(out.acceleration)&&std::isfinite(out.powerScale)&&out.powerScale>0;return out.known;
  }return false;
 }
-void MWELResetNeoDriverRace(){for(auto& row:event_neo_driver::neoRuntime)row={};event_neo_driver::neoDiagnosticHandle=0;}
+void MWELResetNeoDriverRace(){
+ // Retry can change the order in which human/AI rows are allocated while
+ // reusing native vehicle identities. Restore ALL old suspension leases
+ // before any row is cleared/rebound. Otherwise an old row can restore the
+ // human's Simple suspension after a different row has just acquired Racer.
+ for(auto& row:event_neo_driver::neoRuntime)event_neo_driver::NeoDriftRelease(row);
+ if(!++event_neo_driver::neoDriftGeneration)++event_neo_driver::neoDriftGeneration;
+ for(auto& row:event_neo_driver::neoRuntime)row={};event_neo_driver::neoDiagnosticHandle=0;
+}
+void MWELNeoReleaseObservedGoal(unsigned handle){
+ if(!MWELNeoHoldingAtGenuineGoal(handle))return;
+ for(auto& row:event_neo_driver::neoRuntime)if(row.handle==handle){
+  event_neo_driver::NeoDriftRelease(row);row.owned=false;row.genuineGoalHeld=true;
+ }
+}
 bool MWELInstallGauntletPower(){
  if(event_neo_driver::neoEngineOutputInstalled)return true;
  event_neo_driver::neoEngineOutputInstalled=event_neo_driver::InstallNeoEngineOutput();

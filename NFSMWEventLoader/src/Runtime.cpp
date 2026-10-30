@@ -8,6 +8,7 @@
 #include "EventBarriers.h"
 #include "CarbonParticleFX.h"
 #include "NeoDriverBridge.h"
+#include "DriftLabels.h"
 #include "NeoProviderBridge.h"
 #include "NeoRecoveryObservation.h"
 #include "NativeCheckpointExtension.h"
@@ -95,6 +96,7 @@ LONG CALLBACK ObserveCrash(EXCEPTION_POINTERS* fault){
 #include "RegistrationExperiment.h"
 void MWELCombatNewGeneration();
 void MWELCombatRaceExit();
+void MWELDriftFinish(unsigned,bool);
 bool MWELHotPursuitEscaping(unsigned);
 void MWELHotPursuitFinish(void*,bool,bool,int,void(__cdecl*)(void*));
 bool MWELCombatResultPending();
@@ -113,6 +115,9 @@ void MWELLabProductionEnd(void*,void(__thiscall*)(void*));
 bool MWELCombatVisualHeld(unsigned);
 #include "RaceStartExperiment.h"
 #include "RuntimeLifecycle.h"
+#include "DriftRaceRuntime.h"
+#include "DriftHud.h"
+#include "DriftResults.h"
 void MWELLabProductionFinish(void* actor,void(__cdecl* nativeFinish)(void*)){
  auto previous=runtime_lifecycle::originalFinish;runtime_lifecycle::originalFinish=nativeFinish;
  __try{runtime_lifecycle::Finish(actor);}__finally{runtime_lifecycle::originalFinish=previous;}
@@ -126,6 +131,7 @@ void MWELLabProductionEnd(void* race,void(__thiscall* nativeEnd)(void*)){
 #include "EventLeaderboard.h"
 bool MWELGauntletParticipant(unsigned,unsigned);
 #include "CombatHealthRuntime.h"
+bool MWELEnsureDriftImpact(){return combat_health_runtime::EnsureImpact();}
 #include "HotPursuitRuntime.h"
 #include "GauntletRuntime.h"
 #include "NativeMaterialRuntime.h"
@@ -143,7 +149,7 @@ MWELArmsPlacementFn MWELArmsNativePlacement(){
 #include "ArmsSurvival.h"
 void(__thiscall* armsOriginalRanking)(void*)=nullptr;
 void __fastcall ArmsRanking(void* self,void*){
- armsOriginalRanking(self);arms_survival_runtime::WinningRanks(unsigned(self));
+ armsOriginalRanking(self);arms_survival_runtime::WinningRanks(unsigned(self));drift_race::Ranking(unsigned(self));
 }
 bool MWELArmsPrepareRanking(){
  static bool installed=false,refused=false;if(installed)return true;if(refused)return false;
@@ -154,7 +160,7 @@ bool MWELArmsPrepareRanking(){
  if(MH_EnableHook(site)!=MH_OK){MH_RemoveHook(site);armsOriginalRanking=nullptr;refused=true;Log("ARMS_SURVIVAL_REFUSED native_ranking_enable=1");return false;}
  installed=true;return true;
 }
-bool MWELCombatResultPending(){return hot_pursuit_finish::WinningResult()||arms_survival_runtime::ResultPending();}
+bool MWELCombatResultPending(){return hot_pursuit_finish::WinningResult()||arms_survival_runtime::ResultPending()||drift_race::ResultPending();}
 #include "HotPursuitRegeneration.h"
 #include "GauntletPursuit.h"
 #include "GauntletHud.h"
@@ -170,6 +176,8 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_GauntletV1(){return gaunt
 #include "CombatDefeatExperiment.h"
 bool MWELCombatVisualHeld(unsigned slot){return !productionRuntime&&slot==0&&combat_defeat_experiment::enabled&&combat_defeat_experiment::epochs==1&&((combat_defeat_experiment::visual&&GetTickCount64()-combat_defeat_experiment::visualBegan>=12000)||(combat_defeat_experiment::arrest&&combat_defeat_experiment::visualPlayerReleased));}
 void MWELCombatNewGeneration(){
+ drift_hud::Reset();drift_race::Reset();
+ drift_results::Reset();
  arms_survival_runtime::Reset();
  hot_pursuit_finish::Reset();
  hot_pursuit_runtime::Reset();gauntlet_runtime::Reset();combat_visuals::Reset();combat_markers::Reset();
@@ -179,6 +187,7 @@ void MWELCombatNewGeneration(){
 void MWELCombatRaceExit(){
  static bool releasing=false;if(releasing)return;releasing=true;
  __try {
+  drift_hud::Reset();drift_race::Exit();
   hot_pursuit_runtime::Reset();gauntlet_runtime::Reset();combat_visuals::Reset();combat_markers::Reset();combat_health_runtime::Restore();
  }__finally {releasing=false;}
 }
@@ -318,10 +327,16 @@ void Start(){
   try{auto package=mwel::ParsePackage(entry.path());
    if(!world.Allows(package)){Log("PACKAGE_WORLD_MISMATCH id=%s world=%s not_registered=1",package.id.c_str(),package.worldSnapshotId.c_str());continue;}
    const auto combat=mwcombat::Parse(package.authoring.value("combatMode",std::string("none")).c_str());
-   if(combat!=mwcombat::Mode::None){
-    const auto dependency=GetModuleHandleW(mwcombat::Weapons(combat)?L"MWArmsAssist.asi":L"ArcadeDrift.asi");
-    const auto contract=dependency?reinterpret_cast<mwcombat::Contract>(GetProcAddress(dependency,mwcombat::Weapons(combat)?"MWAA_CombatContractV1":"MWDRIFT_RaceContractV1")):nullptr;
-    if((mwcombat::Weapons(combat)&&!GetModuleHandleW(L"MWArsenal.asi"))||!contract||!(contract(mwcombat::Version)&mwcombat::Bit(combat))){
+   if(combat==mwcombat::Mode::Drift){
+    auto player=GetModuleHandleW(L"MWArcadeDrift.asi"),ai=GetModuleHandleW(L"MWArcadeDriftAI.asi");
+    if(!player||!ai||!GetProcAddress(player,"MWArcadeDriftAcquireSpecialV1")||!GetProcAddress(ai,"MWArcadeDriftAI_SetIntentV1")||!mwel::NeoEnabled(package.authoring)){
+     Log("PACKAGE_DRIFT_DEPENDENCY_MISSING id=%s requires=MWArcadeDrift+MWArcadeDriftAI+NeoAI",package.id.c_str());continue;
+    }
+    if(!hot_pursuit_finish::Install()||!MWELArmsPrepareRanking()||!drift_results::Install()){Log("PACKAGE_DRIFT_UNAVAILABLE native_finish_ranking_or_results_owner_conflict=1");continue;}
+   }else if(mwcombat::Weapons(combat)){
+    const auto dependency=GetModuleHandleW(L"MWArmsAssist.asi");
+    const auto contract=dependency?reinterpret_cast<mwcombat::Contract>(GetProcAddress(dependency,"MWAA_CombatContractV1")):nullptr;
+    if(!GetModuleHandleW(L"MWArsenal.asi")||!contract||!(contract(mwcombat::Version)&mwcombat::Bit(combat))){
      Log("PACKAGE_DEPENDENCY_MISSING id=%s mode=%s not_registered=1",package.id.c_str(),package.authoring.at("combatMode").get_ref<const std::string&>().c_str());continue;
     }
    }
@@ -375,8 +390,10 @@ void Start(){
    }
    auto field=game/L"MWEventLoader.field-test";
    if(mwel::fs::exists(field)){
-    if(!race_start_experiment::neoObserver||mwel::Read(field,256)!="MW_EVENT_LOADER_FULL_FIELD_EXPERIMENT_V1\n"){Log("REFUSED full_field_marker");return;}
+    const auto fieldMode=mwel::Read(field,256);
+    if(!race_start_experiment::neoObserver||(fieldMode!="MW_EVENT_LOADER_FULL_FIELD_EXPERIMENT_V1\n"&&fieldMode!="MW_EVENT_LOADER_FULL_FIELD_RETIREMENT_EXPERIMENT_V2\n")){Log("REFUSED full_field_marker");return;}
     race_start_experiment::waitForField=true;
+    race_start_experiment::retireObservedFinishers=fieldMode=="MW_EVENT_LOADER_FULL_FIELD_RETIREMENT_EXPERIMENT_V2\n";
    }
    const bool transition= race_start_experiment::ConfigureCustomTransition();
    if(mwel::Read(race,256)!="MW_EVENT_LOADER_TEMPLATE_ROUTE_START_EXPERIMENT_V1\n"||(packages.size()!=1&&!transition)||!race_start_experiment::Install()){Log("REFUSED race_experiment_activation");return;}
@@ -417,6 +434,8 @@ void Start(){
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_ReadyV1(){return runtimeReady&&runtime_lifecycle::enabled;}
 #pragma comment(linker,"/EXPORT:MWEL_InheritedPreviewV1=_MWEL_InheritedPreviewV1")
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_InheritedPreviewV1(){return 1;}
+#pragma comment(linker,"/EXPORT:MWEL_DriftRaceV1=_MWEL_DriftRaceV1")
+extern "C" __declspec(dllexport) unsigned __cdecl MWEL_DriftRaceV1(unsigned version){return version==1?1u:0u;}
 #pragma comment(linker,"/EXPORT:MWEL_FrameV1=_MWEL_FrameV1")
 extern "C" __declspec(dllexport) void __cdecl MWEL_FrameV1(){
  if(!runtime_lifecycle::enabled&&!race_start_experiment::enabled)return;
@@ -445,7 +464,7 @@ extern "C" __declspec(dllexport) void __cdecl MWEL_FrameV1(){
   arms_survival_runtime::Frame();
   combat_visuals::Frame();combat_markers::Frame();
   combat_defeat_experiment::Frame();
-  runtime_lifecycle::Frame();checkpoint_display::Tick();
+  runtime_lifecycle::Frame();drift_race::Frame();checkpoint_display::Tick();
  }__except(EXCEPTION_EXECUTE_HANDLER){
   runtimeReady=false;runtime_lifecycle::enabled=false;race_start_experiment::aborted=true;
   Log("EXPERIMENT_RACE_ABORT common_frame_fault=%08X",unsigned(GetExceptionCode()));
@@ -479,7 +498,9 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_EncounterTargetHookOwnerV
  return unsigned(hot_pursuit_runtime::originalTarget)+6+5+displacement==address+6;
 }
 
-extern "C" __declspec(dllexport) unsigned __cdecl MWEL_LocalRaceTestV1(){return (race_start_experiment::enabled&&race_start_experiment::neoObserver&&!race_start_experiment::aborted)||(runtime_lifecycle::careerAutodrive&&runtime_lifecycle::validationEnabled);}
+extern "C" __declspec(dllexport) unsigned __cdecl MWEL_LocalRaceTestV1(){return (race_start_experiment::enabled&&race_start_experiment::neoObserver&&!race_start_experiment::manualPlayer&&!race_start_experiment::aborted)||(runtime_lifecycle::careerAutodrive&&runtime_lifecycle::validationEnabled);}
+extern "C" __declspec(dllexport) unsigned __cdecl MWEL_PlayerEngineTestV1(){return race_start_experiment::enabled&&race_start_experiment::neoObserver&&race_start_experiment::playerEngineTest&&!race_start_experiment::aborted?(race_start_experiment::playerPadEngineTest?2u:1u):0u;}
+#pragma comment(linker,"/EXPORT:MWEL_PlayerEngineTestV1=_MWEL_PlayerEngineTestV1")
 #pragma comment(linker,"/EXPORT:MWEL_MapOwnerV1=_MWEL_MapOwnerV1")
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_MapOwnerV1(unsigned key){return event_maps::active&&event_maps::calibrations.count(key)!=0;}
 #pragma comment(linker,"/EXPORT:MWEL_NeoDriverOwnerV1=_MWEL_NeoDriverOwnerV1")
@@ -532,7 +553,7 @@ bool MWELNeoLoggingEnabled(){return worldLogEnabled;}
 bool MWELNeoDetailedLoggingEnabled(){return neoDiagnosticsEnabled;}
 bool MWELGauntletBoostOutput(void* vehicle,float* output){return gauntlet_runtime::Boost(unsigned(vehicle),output);}
 bool MWELNeoHoldingAtGenuineGoal(unsigned handle){
- if(!handle||!race_start_experiment::FieldPending())return false;
+ if(!handle||race_start_experiment::ObservedFinisherRetired(handle)||!race_start_experiment::FieldCoastPending())return false;
  for(unsigned slot=0;slot<16;++slot)if((race_start_experiment::genuineGoals&(1u<<slot))&&race_start_experiment::motions[slot].handle==handle)return true;
  return false;
 }
@@ -542,6 +563,20 @@ unsigned MWELNeoCurrentKey(){
  auto collection=race_start_experiment::Read<registration_experiment::Collection*>(record,4);
  registration_experiment::Collection* visited[16]{};
  for(unsigned i=0;collection&&i<16;++i){for(unsigned j=0;j<i;++j)if(visited[j]==collection)return 0;visited[i]=collection;auto key=race_start_experiment::Read<unsigned>(collection,0x20);auto owned=registration_experiment::Find(key);if(owned&&owned->race)return key;collection=race_start_experiment::Read<registration_experiment::Collection*>(collection,0x10);}return 0;
+}
+unsigned MWELNeoDriftMode(){
+ auto package=event_race_policies::Current();if(!package||!mwel::NeoEnabled(package->authoring))return 0;
+ if(package->authoring.value("combatMode",std::string("none"))=="drift")return 2;
+ const auto& a=package->authoring;auto field=a.find("driftAIMode");
+ if(field==a.end()||!field->is_number_integer())return 0;
+ int mode=field->get<int>();return mode>=1&&mode<=2?unsigned(mode):0;
+}
+unsigned MWELNeoDriftLimit(){
+ auto package=event_race_policies::Current();if(!package)return 0;
+ if(package->authoring.value("combatMode",std::string("none"))=="drift")return 16;
+ const auto& a=package->authoring;auto field=a.find("driftAIMaxRacers");
+ if(field==a.end())return 16;if(!field->is_number_integer())return 0;
+ return unsigned(std::clamp(field->get<int>(),0,16));
 }
 bool MWELNeoCourseEnabled(){auto package=event_race_policies::Current();return package&&mwel::NeoEnabled(package->authoring);}
 bool MWELNeoCourseFile(unsigned key,const char* suffix,char* output,unsigned size){

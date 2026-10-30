@@ -3,11 +3,11 @@
 [English](README.md) · [イベントエディタ](https://zakkey250.github.io/MW-Event-Editor/) · [リリース一覧](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.0.3:** アームズレースの生存勝利、純正イベントの開始配置、UG2の合図とGOを修正しました。変換済みカットシーンの再変換は不要です。[更新内容](docs/Release-Notes-1.0.3.md)
+> **1.1.0:** ドリフトレースを追加し、MW Arcade Drift 0.2.0と連携しました。専用HUD・ポイント結果・NeoAIのドリフト走行に対応します。[更新内容](docs/Release-Notes-1.1.0.md)
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader 1.0.3](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.3) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.1.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.1.0) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。
@@ -71,6 +71,12 @@ MWArsenal【ArmsAssist・武器追加種目に必須】
 MWArsenal本体とアセットの両方が必要です。MWArsenalだけでは3つの追加種目を利用できません。通常イベントだけを使う場合、武器関連機能の導入は不要です。
 MWArsenal専用のストリングファイルを追加導入する必要はありません。必要なテキスト表示はArmsAssistが補います。
 Shiftersc & LEE-RYO 作者配布ページ：<https://www.nfsaddons.com/downloads/nfsmw/tools/11267/mw-arsenal.html>
+
+MW Arcade Drift 0.2.0【ドリフト種目に必須】
+
+Event Loader 1.1.0から連携に対応しました。Coreパッケージに含まれる **MWArcadeDrift.asi** と **MWArcadeDriftAI.asi** を両方導入してください。プレイヤーはイベント中にスペシャルモードへ自動切り替えし、NeoAIの相手車両もドリフト補助を使用します。終了後は元のプレイヤーモードへ戻ります。ドリフト以外のイベントだけなら不要です。専用Editorは車種別設定や操作機器の調整用で、任意です。
+作者GitHub：<https://github.com/Zakkey250/MW-Arcade-Drift>
+Core 0.2.0：<https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.0>
 
 MWHealthbars / NFSMW Cop Car Healthbars【推奨・任意】
 
@@ -228,9 +234,9 @@ MW Event Editorを開く：<https://zakkey250.github.io/MW-Event-Editor/>
 
 全てを導入した場合の例です。第三者MODの同梱を意味するものではありません。本体ZIP、イベントZIP、変換したカットシーンZIPはそれぞれ別です。診断ログは標準でOFFになっています。
 
-## 追加種目の共通ルール
+## 武器追加種目の共通ルール
 
-3種目とも、MWArsenal＋ArmsAssist＋対応するEvent Loaderが必要です。通常イベントには、以下の追加HPルールを適用しません。
+武器を使う3種目とも、MWArsenal＋ArmsAssist＋対応するEvent Loaderが必要です。通常イベントとドリフトには、以下の追加HPルールを適用しません。
 
 ・レーサーはプレイヤー・AIともHP 300です。警察の基準値100に対して、3倍の耐久があります。
 ・基本武器ダメージはEMP 25、スパイク50、ショックウェーブ15です。最大HPに対する割合ではなく固定値なので、HP 300はスパイク6回分が基準です。種目ごとの軽減がある場合は、その補正を適用します。
@@ -277,6 +283,17 @@ MW Event Editorを開く：<https://zakkey250.github.io/MW-Event-Editor/>
 生存台数は、出走台数からリタイア・脱落台数を引いた数です。先にゴールした車両も生存に含みます。上位ほど取り分が増え、仲間が多く生き残るほど報酬の総額も大きくなります。
 
 例：設定報酬25,000・生存6台・自分が3位なら50,000。8台全員が生存し、自分が8位なら25,000です。生存が自分1台なら、報酬の元額は設定報酬額になります。
+
+## 追加種目 4：ドリフトレース
+
+スプリント／サーキット専用のポイント勝負です。警察・武器・追加HPルールは使用しません。MW Arcade Drift 0.2.0のCoreを別途導入してください。
+
+・有効なドリフトの継続2秒ごとに倍率が+1倍、最大10倍になります。
+・壁・他車への接近でボーナスが加わります。強い壁ヒットでは未確定コンボを失いますが、確定済みの得点は残ります。
+・左上の専用HUDで合計・加算中の得点・倍率・角度を確認できます。EA TRAXの曲名表示とは自動で重なりを避けます。
+・CPではスプリットポイント、順位・勝利画面・リザルトではドリフトポイントを表示します。
+・プレイヤーがゴールすると相手の残り区間を予測して結果を確定します。予測を含む合計には「~」が付きます。
+・イベントを離れると、プレイヤーのドリフトモードは参加前の設定へ戻ります。
 
 ## 注意事項：著作権・データ・再配布
 

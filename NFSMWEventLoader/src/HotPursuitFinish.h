@@ -70,6 +70,14 @@ void __cdecl Losing(){if(WinningResult()){Log("HOT_PURSUIT_NATIVE_WIN_RESULT act
 // Preserve GRacerInfo ranking and award arithmetic. Only this success event
 // for the exact genuinely finished local actor reports a winning placement.
 void __cdecl Placement(void* sender,void* actor,unsigned place){
+ if(drift_race::Current()&&actor){
+  const auto slot=reinterpret_cast<int(__cdecl*)(void*)>(0x60DAE0)(actor)-1;
+  if(slot>=0&&unsigned(slot)<drift_race::count&&(drift_race::genuineMask&(1u<<slot))){
+   drift_race::Ranking(drift_race::owner);
+   const auto ranked=expanded_leaderboard::Read<unsigned>(reinterpret_cast<void*>(drift_race::owner+0x18+slot*0x194),0x10);
+   if(ranked&&ranked<=drift_race::count){Log("DRIFT_NATIVE_PLACEMENT slot=%d native_place=%u score_place=%u",slot,place,ranked);originalPlacement(sender,actor,ranked);return;}
+  }
+ }
  unsigned race=0,params=0,handle=0,playerHandle=0,outcome=0;BYTE finished=0,dnf=0;
  const bool survivor=resultActor&&unsigned(actor)==resultActor&&resultRace&&resultPlace&&
   GetCurrentThreadId()==combat_health_runtime::gameThread&&Read(0x91E000,race)&&race==resultRace&&

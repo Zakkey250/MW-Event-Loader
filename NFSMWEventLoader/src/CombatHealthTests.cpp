@@ -38,7 +38,7 @@ int main(){
   Check(std::abs(car.remaining-(300-combat_health::WeaponUnits(hit)*.75f))<.0001f,"police weapon scope reduces damage exactly 25 percent");
  }
  {combat_health::Car car;car.Begin(123,false);car.Damage(combat_health::Hit::Collision,20,.75f);Check(car.remaining==280,"weapon reduction never changes contact damage");}
- Check(event_presentation_policy::Supported("hotpursuit")&&!event_presentation_policy::Supported("none")&&!event_presentation_policy::Supported("drift"),"presentation explicitly recognizes Hot Pursuit without changing ordinary races");
+ Check(event_presentation_policy::Supported("hotpursuit")&&!event_presentation_policy::Supported("none")&&event_presentation_policy::Supported("drift"),"presentation recognizes owned event modes without changing ordinary races");
  for(const auto rules:{"sprint","circuit","lapknockout","speedtraprace"}){
   Check(event_presentation_policy::Name("hotpursuit",rules,false).find(L"Hot Pursuit - ")==0,"all Hot Pursuit native rule variants retain a distinct English mode name");
   Check(event_presentation_policy::Name("hotpursuit",rules,true).find(L"\u30db\u30c3\u30c8\u30d1\u30fc\u30b9\u30fc\u30c8 - ")==0,"all Hot Pursuit native rule variants retain a distinct Japanese mode name");

@@ -1,11 +1,37 @@
 #pragma once
 #include "PlayerLapNotice.h"
+#include "DriftSplitPolicy.h"
 namespace event_leaderboard {
 void(__thiscall* original)(void*,void*)=nullptr;
 void* featureTrampoline=nullptr;
 using LapPopupFn=bool(__thiscall*)(void*,void*);
 LapPopupFn nativeLapPopup=nullptr;
+LapPopupFn nativeSplitPopup=nullptr;
 PlayerLapNotice lapNotice;
+bool __fastcall SplitPopup(void* board,void*,void* player){
+ if(!drift_race::Current())return nativeSplitPopup(board,player);
+ if(drift_race::faulted||drift_race::finalScores)return false;
+ using namespace expanded_leaderboard;
+ // EN1.3 LeaderBoard::ShowSplitTime 0057AB10: preserve its settings,
+ // busy-message test, priority, animation and native interval trigger.
+ auto table=Read<unsigned*>(player);if(!table)return false;
+ auto settings=reinterpret_cast<BYTE*(__thiscall*)(void*)>(table[5])(player);
+ if(!settings)return false;
+ if(Read<BYTE>(settings,0x10)==4){*reinterpret_cast<BYTE*>(static_cast<BYTE*>(board)+0x44)=0;return false;}
+ auto sim=reinterpret_cast<BYTE*(__thiscall*)(void*)>(table[8])(player);if(!sim)return false;
+ auto com=Read<void*>(sim,4);if(!com)return false;
+ auto message=reinterpret_cast<void*(__thiscall*)(void*,void*)>(0x5D59F0)(com,reinterpret_cast<void*>(0x5650B0));
+ auto methods=Read<unsigned*>(message);if(!methods||reinterpret_cast<bool(__thiscall*)(void*)>(methods[3])(message))return false;
+ const auto slot=PlayerSlot(player,reinterpret_cast<BYTE*>(drift_race::owner),drift_race::count);
+ std::array<unsigned,16> points{};unsigned retired=0;
+ for(unsigned i=0;i<drift_race::count;++i){points[i]=drift_race::scores[i].standing();auto info=reinterpret_cast<void*>(drift_race::owner+0x18+i*0x194);if(Read<unsigned>(info,0x1C)||Read<BYTE>(info,0x190))retired|=1u<<i;}
+ const auto difference=mwel_drift_split::Compare(points,drift_race::count,slot,retired);if(!difference.valid)return false;
+ char text[160];sprintf_s(text,"%s\n%+d Pts",drift_hud::SplitLabel(),difference.points);
+ const unsigned animation=difference.points>=0?0xA19BB14Cu:0x5230FAF6u;
+ reinterpret_cast<void(__thiscall*)(void*,const char*,bool,unsigned,unsigned,unsigned,unsigned)>(methods[1])(message,text,false,animation,0,0,3);
+ Log("DRIFT_SPLIT_POINTS slot=%u opponent=%u player_points=%u opponent_points=%u delta=%d native_interval=1 native_animation=1 lines=2",slot,difference.opponent,points[slot],points[difference.opponent],difference.points);
+ return true;
+}
 bool ExpandedRace(BYTE*& race,unsigned& count){
  race=expanded_leaderboard::Read<BYTE*>(reinterpret_cast<void*>(0x91E000));count=expanded_leaderboard::Read<unsigned>(race,0x1958);
  return nativeLapPopup&&MWELNeoCurrentKey()&&race&&count>4&&count<=16&&expanded_leaderboard::Read<unsigned>(race,0x1960)==1;
@@ -35,7 +61,7 @@ void PlayerLap(void* board,void* player){
  Log("EVENT_PLAYER_LAP_NOTICE handle=%u slot=%u completed=%u rank=%u seconds=%.4f displayed=%u native_message=1 CP_lap_clock_writes=0",handle,slot,completed,Read<unsigned>(info,0x10),elapsed,unsigned(displayed));
 }
 void(__thiscall* nativeFeatures)(void*,unsigned long long)=reinterpret_cast<void(__thiscall*)(void*,unsigned long long)>(0x5793F0);
-void __fastcall Features(void* self,void*,unsigned long long features){nativeFeatures(self,features);expanded_leaderboard::FeaturesChanged(self,features);}
+void __fastcall Features(void* self,void*,unsigned long long features){nativeFeatures(self,features);expanded_leaderboard::FeaturesChanged(self,features);drift_hud::Features(self,features);}
 void __declspec(naked) LeaderboardFeatures(){
  // Replace only FEngHud's LeaderBoard call, never the common HudElement
  // entry used by the tachometer, speedometer, minimap and other HUD mods.
@@ -47,6 +73,7 @@ void __declspec(naked) LeaderboardFeatures(){
 void __fastcall Update(void* self,void*,void* player){
  original(self,player);
  expanded_leaderboard::Update(self,player);
+ drift_hud::Update(self,player);
  PlayerLap(self,player);
 }
 bool Install(){
@@ -63,6 +90,10 @@ bool Install(){
  const BYTE lapGuard[]={0x83,0xEC,0x30,0x56,0x57,0x8B,0xF9};auto lapSite=reinterpret_cast<void*>(0x57ACC0);
  if(!memcmp(lapSite,lapGuard,sizeof(lapGuard))&&MH_CreateHook(lapSite,LapPopup,reinterpret_cast<void**>(&nativeLapPopup))==MH_OK){
   if(MH_EnableHook(lapSite)!=MH_OK){MH_RemoveHook(lapSite);nativeLapPopup=nullptr;}
+ }
+ const BYTE splitGuard[]={0x83,0xEC,0x30,0x56,0x57,0x8B,0x7C,0x24,0x3C};auto splitSite=reinterpret_cast<void*>(0x57AB10);
+ if(!memcmp(splitSite,splitGuard,sizeof(splitGuard))&&MH_CreateHook(splitSite,SplitPopup,reinterpret_cast<void**>(&nativeSplitPopup))==MH_OK){
+  if(MH_EnableHook(splitSite)!=MH_OK){MH_RemoveHook(splitSite);nativeSplitPopup=nullptr;}
  }
  return true;
 }

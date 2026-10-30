@@ -16,6 +16,16 @@ int wmain(int argc,wchar_t** argv){
    Check(mwel::Feature({{name,true}},name),"Explicit feature ignored");
   }
   Check(!mwel::NeoEnabled(mwel::Json::object())&&!mwel::NeoEnabled({{"aiRouteMode","native"}})&&!mwel::NeoEnabled({{"aiRouteMode",nullptr}})&&mwel::NeoEnabled({{"aiRouteMode","yellow"}}),"Per-event Neo opt-in failed");
+  for(const char* base:{"sprint","circuit","speedtraprace","lapknockout","drag","tollboothrace"}){
+   Check(mwcombat::Compatible(mwcombat::Mode::Drift,base,6)==(!strcmp(base,"sprint")||!strcmp(base,"circuit")),"Drift accepted unsupported base rules");
+  }
+  for(const char* mode:{"none","armsrace","gauntlet","hotpursuit","drift"}){
+   mwel::Json event={{"combatMode",mode},{"cops",true},{"copDensity",100},{"startHeatLevel",5}};auto original=event;
+   mwel::ApplyFixedRaceRules(event);
+   if(!strcmp(mode,"drift"))Check(event.at("cops")==false&&event.at("copDensity")==0&&event.at("startHeatLevel").is_null(),"Drift retained police or starting heat");
+   else Check(event==original,"Drift policy changed another race mode");
+  }
+  std::cout<<"DRIFT_FIXED_RULES_PASS sprint/circuit only, police and heat disabled; other modes unchanged\n";
   for(unsigned count=1;count<=16;++count){
    Check(mwel_carbon::Valid("auto",count)&&mwel_carbon::Valid("stock",count),"Default/native intro rejected");
    for(auto name:{"INTRO01NG02","INTRO02NG02","INTRO04NG02","INTRO05NG02","INTRO07B02NG","INTRO11B02NG","INTRO12B02NG","INTRO12NG","INTRODEFAULT"}){
@@ -71,6 +81,7 @@ int wmain(int argc,wchar_t** argv){
   Check(overflow,"Float rounding overflow accepted");
   if(argc!=3)throw std::runtime_error("Provide package fixture and fresh sidecar test directory");
   auto package=mwel::ParsePackage(argv[1]);auto root=mwel::fs::path(argv[2]);
+  if(package.authoring.value("combatMode",std::string("none"))=="drift")Check(package.authoring.at("cops")==false&&package.authoring.at("copDensity")==0&&package.authoring.at("startHeatLevel").is_null(),"Parsed Drift package retained police settings");
   if(mwel::fs::exists(root))throw std::runtime_error("Use a fresh sidecar test directory");
   mwel::fs::create_directories(root/"world");world_compatibility::Context world(root/"world");auto portable=package;
   portable.authoring["worldCompatibility"]=world_compatibility::Current(root/"world");
@@ -108,6 +119,14 @@ int wmain(int argc,wchar_t** argv){
   Check(reopened.Records().at(key).at("bestSeconds")==95,"Best time did not persist");
   Check(reopened.Records().at(key).at("attempts")==2,"Rejected finishes were counted");
   Check(bob.Records().empty()&&alice.Path()!=bob.Path(),"Profile isolation failed");
+  {
+   auto drift=package;drift.revision+=101;drift.authoring["combatMode"]="drift";
+   mwel::FinishEvidence scored{true,false,3,125,3400};Check(alice.Record(drift,scored),"Drift lower score rank finish refused");
+   auto driftKey=mwel::ProfileSidecar::Key(drift);Check(alice.Records().at(driftKey).at("wins")==0&&alice.Records().at(driftKey).at("bestScore")==3400,"Drift score or losing result lost");
+   scored.place=1;scored.score=10000;Check(alice.Record(drift,scored),"Drift score victory refused");
+   scored.forcedRaceEnd=true;Check(!alice.Record(drift,scored),"Forced drift goal accepted");
+   Check(alice.Records().at(driftKey).at("wins")==1&&alice.Records().at(driftKey).at("bestScore")==10000,"Drift highest score did not persist");
+  }
   {
    auto survivalPackage=package;survivalPackage.revision+=100;
    mwel::FinishEvidence survival{false,false,1,12.5,0,true};

@@ -3,11 +3,11 @@
 [日本語](README.ja.md) · [Event Editor](https://zakkey250.github.io/MW-Event-Editor/) · [All releases](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.0.3:** Adds last-survivor Arms Race victories and fixes native-event start placement and UG2 GO gestures. Existing cutscenes need no reconversion. [Release notes](docs/Release-Notes-1.0.3.md)
+> **1.1.0:** Adds Drift races with MW Arcade Drift 0.2.0 support, a dedicated HUD, point-based results and NeoAI drift driving. [Release notes](docs/Release-Notes-1.1.0.md)
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader 1.0.3](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.0.3) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader 1.1.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.1.0) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.
@@ -71,6 +71,12 @@ NFRR download page (includes LB): <https://github.com/Zakkey250/MW-NativeFreeRoa
 Install both MWArsenal and its assets. MWArsenal alone does not enable the three additional modes. You do not need the weapon components if you only want normal events.
 There is no need to install MWArsenal’s separate string files; ArmsAssist supplies the required on-screen text.
 Download by Shiftersc & LEE-RYO: <https://www.nfsaddons.com/downloads/nfsmw/tools/11267/mw-arsenal.html>
+
+### MW Arcade Drift 0.2.0 (Required for Drift Races)
+
+Supported from Event Loader 1.1.0. Install both **MWArcadeDrift.asi** and **MWArcadeDriftAI.asi** from its Core package. Drift events automatically select Special mode for the player and enable drift assistance for NeoAI opponents; leaving the event restores your previous player mode. This dependency is optional if you do not play Drift races. Its separate Editor is optional for per-car tuning and control-device settings.
+Author’s GitHub: <https://github.com/Zakkey250/MW-Arcade-Drift>
+Core 0.2.0: <https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.0>
 
 ### MWHealthbars / NFSMW Cop Car Healthbars (Recommended / Optional)
 
@@ -228,9 +234,9 @@ Game folder (containing speed.exe)/
 
 This example shows a full installation; third-party mods are not included in the package. The main package, event ZIPs and locally converted cutscene ZIPs are separate. Diagnostic logging is off by default.
 
-## Shared Rules for the Additional Modes
+## Shared Rules for the Weapon Modes
 
-All three modes require MWArsenal, ArmsAssist and a compatible Event Loader. The additional health rules below do not apply to normal events.
+The three weapon modes require MWArsenal, ArmsAssist and a compatible Event Loader. The additional health rules below do not apply to normal events or Drift.
 
 - Player and AI racers have 300 HP, three times the 100-point police reference.
 - Base weapon damage is 25 for EMP, 50 for spikes and 15 for Shockwave. These are fixed HP values, not percentages of maximum health. A full 300 HP therefore equals six spike hits before any mode-specific reductions.
@@ -277,6 +283,17 @@ Your reward = configured reward × surviving racers ÷ your finishing position
 Survivors are the starting field minus retired or eliminated racers, including cars that have already finished. A higher position earns you a larger share, while more surviving teammates increase the reward pool.
 
 For example, a configured reward of 25,000 with six survivors and a third-place finish pays 50,000. If all eight survive and you finish eighth, you receive 25,000. If you are the only survivor, the reward pool is the configured reward amount.
+
+## Additional Mode 4: Drift
+
+A point-based Sprint or Circuit with police, weapons and the additional HP rules disabled. Install MW Arcade Drift 0.2.0 Core separately.
+
+- Every two seconds of qualifying drifting raises the multiplier by one level, up to x10.
+- Driving close to walls or other cars adds bonuses. A heavy wall hit loses the pending combo, while banked points remain safe.
+- The top-left HUD shows total and live points, multiplier and angle, and moves aside for EA TRAX song notices.
+- Checkpoints show split points; standings, victory displays and results show drift points.
+- When the player finishes, opponents receive estimates for the remaining course. Totals that include predictions are marked with “~”.
+- Leaving the event restores your previous player drift mode.
 
 ## Copyright, Game Data & Redistribution
 

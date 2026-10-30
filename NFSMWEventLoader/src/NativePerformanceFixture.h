@@ -2,8 +2,26 @@
 // never enter this path. It changes only native per-vehicle attributes, not
 // banks, tuning, boost policy, save records or controller behavior.
 bool performanceFixture=false;
+bool performanceFixtureJunkman=true;
 unsigned performanceFixtureHandles[16]{};
+unsigned performanceAuditHandles[16]{};
 bool ApplyPerformanceFixture(BYTE* vehicle,unsigned handle,unsigned slot){
+ // Read-only inventory of the no-save lab's real packages. A forced car
+ // model does not imply equal tuning between its human and AI instances.
+ if(worldLogEnabled&&slot<16&&performanceAuditHandles[slot]!=handle){
+  const BYTE levelGuard[]={0x6A,0xFF,0x68,0x38,0xA9,0x87,0,0x64};
+  if(!memcmp(reinterpret_cast<void*>(0x672D30),levelGuard,sizeof(levelGuard))){
+   __try{
+    auto& attributes=*reinterpret_cast<NFSPluginSDK::MW05::Attrib::Gen::pvehicle*>(vehicle+0x24);
+    if(attributes.mCollection&&attributes.mLayoutPtr){
+     unsigned levels[7]{};
+     for(unsigned i=0;i<7;++i)levels[i]=unsigned(NFSPluginSDK::MW05::Physics::Upgrades::Package::GetLevel(attributes,NFSPluginSDK::MW05::Physics::Upgrades::Type(i)));
+     Log("EXPERIMENT_NATIVE_PERFORMANCE_BEFORE handle=%u slot=%u levels=%u,%u,%u,%u,%u,%u,%u writes=0",handle,slot,levels[0],levels[1],levels[2],levels[3],levels[4],levels[5],levels[6]);
+     performanceAuditHandles[slot]=handle;
+    }
+   }__except(EXCEPTION_EXECUTE_HANDLER){Log("EXPERIMENT_NATIVE_PERFORMANCE_BEFORE handle=%u slot=%u refused=read_fault writes=0",handle,slot);}
+  }
+ }
  if(!performanceFixture||slot>=16||performanceFixtureHandles[slot]==handle)return true;
  const BYTE maximumGuard[]={0x83,0xEC,0x20,0x33,0xC0,0x89,0x04,0x24};
  const BYTE junkmanGuard[]={0x6A,0xFF,0x68,0x90,0xAB,0x87,0x00};
@@ -17,7 +35,7 @@ bool ApplyPerformanceFixture(BYTE* vehicle,unsigned handle,unsigned slot){
   Upgrades::SetMaximum(attributes);
   unsigned mask=0,levels[7]{};float percent[7]{};
   for(unsigned i=0;i<7;++i){
-   if(Upgrades::CanInstallJunkman(attributes,Type(i))){Upgrades::SetJunkman(attributes,Type(i));mask|=1u<<i;}
+   if(performanceFixtureJunkman&&Upgrades::CanInstallJunkman(attributes,Type(i))){Upgrades::SetJunkman(attributes,Type(i));mask|=1u<<i;}
    levels[i]=unsigned(Upgrades::GetLevel(attributes,Type(i)));
    percent[i]=Upgrades::GetPercent(attributes,Type(i));
   }

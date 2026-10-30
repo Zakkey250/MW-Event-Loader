@@ -9,6 +9,8 @@
 namespace expanded_leaderboard {
 inline bool(*combatActive)()=nullptr;
 inline bool(*combatHealth)(unsigned,unsigned,float&,float&)=nullptr;
+inline bool(*driftActive)()=nullptr;
+inline unsigned(*driftScore)(unsigned)=nullptr;
 using Object=unsigned*;
 inline unsigned Hash(const char* p){unsigned h=~0u;while(*p)h=h*33+static_cast<unsigned char>(*p++);return h;}
 template<class T> T Read(const void* p,unsigned at=0){T value{};__try{if(p)memcpy(&value,static_cast<const BYTE*>(p)+at,sizeof(T));}__except(EXCEPTION_EXECUTE_HANDLER){}return value;}
@@ -107,6 +109,7 @@ inline unsigned PlayerSlot(void* player,BYTE* race,unsigned count){
 inline void Text(Object object,const char* text){reinterpret_cast<void(__cdecl*)(void*,const char*,...)>(0x515D70)(object,"%s",text);}
 inline void Format(char(&text)[96],BYTE* race,BYTE* info,unsigned slot,unsigned playerSlot,unsigned mode,bool metric,unsigned phase){
  if(!phase){auto name=Read<const char*>(info,8);for(unsigned j=0;name&&j<sizeof(text)-1;++j){text[j]=Read<char>(name,j);if(!text[j])break;}if(!text[0])sprintf_s(text,"Racer %u",slot+1);return;}
+ if(driftActive&&driftActive()&&driftScore){sprintf_s(text,"%u PTS",driftScore(slot));return;}
  if(phase==1&&combatActive&&combatActive()){
   float hp=0,maximum=0;
   if(combatHealth&&combatHealth(slot,Read<unsigned>(info),hp,maximum)&&maximum>0)sprintf_s(text,"HP %.0f%%",double(std::clamp(hp/maximum*100.f,0.f,100.f)));
@@ -135,7 +138,7 @@ inline void Update(void* board,void* player){
  auto race=Read<BYTE*>(reinterpret_cast<void*>(0x91E000));auto count=Read<unsigned>(race,0x1958);
  if(package!=state.package||board!=state.board)state={};
  if(state.ready&&Find(package,RowKey(4,0))!=state.rows[4].name)state={};
- bool active=race&&count>=1&&(count>4||(combatActive&&combatActive()))&&count<=16&&Read<unsigned>(race,0x1960)==1;
+ bool active=race&&count>=1&&(count>4||(combatActive&&combatActive())||(driftActive&&driftActive()))&&count<=16&&Read<unsigned>(race,0x1960)==1;
  if(!active){HideExtra();return;}
  if(!FeaturesVisible(board,Read<unsigned long long>(board,0x20))||reinterpret_cast<bool(__cdecl*)()>(0x64B680)()){HideExtra();return;}
  if(!state.ready&&(state.attempts>=120||!Prepare(board,package)))return;

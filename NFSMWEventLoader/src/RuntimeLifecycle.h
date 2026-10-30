@@ -136,6 +136,7 @@ void __cdecl Finish(void* argument){
   }
  }
  Log("EVENT_RUNTIME_FINISH_OBSERVED key=%08X slot=%d null_argument=%u player=%u genuine=%u ending=%u",key,slot,unsigned(argument==nullptr),unsigned(player),unsigned(genuine),unsigned(ending));
+ if(slot>=0)MWELDriftFinish(unsigned(slot),genuine);
  MWELHotPursuitFinish(actor,genuine,player,slot,originalFinish);
  if(genuine){recordedGoals|=1u<<slot;Log("EVENT_RUNTIME_GENUINE_GOAL key=%08X slot=%d player=%u forced=0",key,slot,unsigned(player));}
  if(genuine&&player&&race==Read<BYTE*>(reinterpret_cast<void*>(0x91E000)))profile_progress::Record(*package,race+0x18+slot*0x194,true,false);

@@ -11,6 +11,7 @@ void(__thiscall* originalDestroy)(void*)=nullptr;
 struct ImpactVector {float x,y,z;};
 using ImpactFn=void(__thiscall*)(unsigned,const ImpactVector*,const ImpactVector*,float,float,unsigned,unsigned);
 ImpactFn originalImpact=nullptr;
+bool impactInstalled=false,impactRefused=false;
 bool nativeTypeGetterVerified=false;
 unsigned(*policeTarget)(unsigned)=nullptr;
 void(*policeDestroyed)(unsigned,unsigned)=nullptr;
@@ -150,6 +151,11 @@ float PoliceContactScale(unsigned victimDriver,unsigned otherDriver){
  return hot_pursuit::PoliceContactScale(policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit",victimDriver,otherDriver);
 }
 void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const ImpactVector* normal,float impulse,float auxiliary,unsigned surface,unsigned other){
+ if(drift_race::Current()){
+  unsigned sim=0,handle=0,otherTable=0,getter=0,type=0;ImpactVector n{};
+  const bool vehicle=other&&Read(other,otherTable)&&Read(otherTable+4,getter)&&getter==0x686A30&&Read(other+0x30,type)&&type==1;
+  if(Read(self+0x34,sim)&&Read(sim+8,handle)&&Copy(normal,&n,sizeof(n)))drift_race::WallContact(handle,impulse,impactMass(self),n.y,BreakableContact(other),vehicle);
+ }
  const int slot=ImpactSlot(self);
  if(slot<0){
   if(!installed||gameThread!=GetCurrentThreadId()||!Active()){originalImpact(self,point,normal,impulse,auxiliary,surface,other);return;}
@@ -227,6 +233,14 @@ void __fastcall Destroy(void* self,void*){
  originalDestroy(self);
  float after=0;if(police&&Native(damage,handle)&&Read(damage+0x3C,after)&&after>=1){if(policeDestroyed)policeDestroyed(handle,target);if(cross&&crossKilledByRacer)crossKilledByRacer(handle,attacker);Notice(1,handle);}
 }
+bool EnsureImpact(){
+ if(impactInstalled)return true;if(impactRefused)return false;
+ const BYTE guard[]={0x6A,0xFF,0x68,0xF7,0xC3,0x87,0,0x64,0xA1};auto address=reinterpret_cast<void*>(0x69C030);
+ if(memcmp(address,guard,sizeof(guard))||MH_CreateHook(address,Impact,reinterpret_cast<void**>(&originalImpact))!=MH_OK||MH_EnableHook(address)!=MH_OK){impactRefused=true;return false;}
+ const BYTE expected[]={0x8B,0x41,0x30,0xC3};BYTE actual[4]{};
+ nativeTypeGetterVerified=Copy(reinterpret_cast<void*>(0x686A30),actual,sizeof(actual))&&!memcmp(actual,expected,sizeof(expected));
+ impactInstalled=true;Log("EVENT_NATIVE_CONTACT_ACTIVE shared_owner=1 drift_without_weapons=1");return true;
+}
 void Frame(){
  if(!Active()){if(ledger.event)Restore();return;}
  gameThread=GetCurrentThreadId();
@@ -239,12 +253,9 @@ void Frame(){
   if(memcmp(address,expected,sizeof(expected))||MH_CreateHook(address,Destroy,reinterpret_cast<void**>(&originalDestroy))!=MH_OK||MH_EnableHook(address)!=MH_OK){
    refused=true;Log("COMBAT_HEALTH_REFUSED native_destroy_owner=1");return;
   }
-  const BYTE impactGuard[]={0x6A,0xFF,0x68,0xF7,0xC3,0x87,0,0x64,0xA1};auto impactAddress=reinterpret_cast<void*>(0x69C030);
-  if(memcmp(impactAddress,impactGuard,sizeof(impactGuard))||MH_CreateHook(impactAddress,Impact,reinterpret_cast<void**>(&originalImpact))!=MH_OK||MH_EnableHook(impactAddress)!=MH_OK){
+  if(!EnsureImpact()){
    MH_DisableHook(address);MH_RemoveHook(address);refused=true;Log("COMBAT_HEALTH_REFUSED native_impact_owner=1");return;
   }
-  const BYTE typeGetterGuard[]={0x8B,0x41,0x30,0xC3};BYTE typeGetterBytes[4]{};
-  nativeTypeGetterVerified=Copy(reinterpret_cast<void*>(0x686A30),typeGetterBytes,sizeof(typeGetterBytes))&&!memcmp(typeGetterBytes,typeGetterGuard,sizeof(typeGetterGuard));
   installed=true;Log("COMBAT_HEALTH_ACTIVE racers_maximum=300 police_reference=100 transient=1 breakable_filter_verified=%u",unsigned(nativeTypeGetterVerified));
  }
  if(!installed)return;

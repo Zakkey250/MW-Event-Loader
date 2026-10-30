@@ -3,6 +3,12 @@
 #include "../../World2MW/src/NeoAI/Nitrous.h"
 #include "../../World2MW/src/NativeLoader/NeoBody.h"
 #include "NeoSimulationStep.h"
+#include "NeoDriftIntent.h"
+#include "NeoDriftPhysics.h"
+#include "NeoPostGoalCoast.h"
+#include "NeoNativePowerTrim.h"
+#include "NeoNativeSlipLead.h"
+#include "../../MW-Arcade-Drift-public/src/NativePadSteering.h"
 using NeoDrivingFn=void(__thiscall*)(void*,float);
 using NeoInputFn=void(__thiscall*)(void*,float);
 static NeoDrivingFn neoOriginalDriving=nullptr;
@@ -31,10 +37,33 @@ struct NeoRuntimeState {
  std::array<mwneo::Point,65> testPoints{};unsigned testPointCount=0;bool testPointsReady=false;float testIntegral=0,testSteering=0;
  bool brakeProbeStarted=false,brakeProbeFinished=false,brakeProbeValid=true;float brakeProbeInitial=0,brakeProbeTime=0,brakeProbeGrade=0;
  bool genuineGoalHeld=false;
+ NeoPostGoalCoast genuineGoalCoast;
+ NeoNativePowerTrim nativePowerTrim;
+ mcd::NativePadSteering nativeTurnDemand;
  mwneo::Point groundPosition{};float groundExtent=0;
+ NeoDriftIntent driftIntent;bool driftIntentActive=false;
+ mwneo::Point driftMotionHeading{},driftMotionTravel{};bool driftMotionReady=false;
+ float driftBodyRate=0,driftTravelRate=0,driftClearSeconds=-1;ULONGLONG driftClearAt=0;
+ bool driftSelected=false;float driftLearningHold=0,driftSteeringLock=0;ULONGLONG driftLogged=0;
  NeoSimulationStep simulationStep;
 };
 static NeoRuntimeState neoRuntime[16];
+// Leases cannot live inside the copied/reset row. Release before every row reset.
+static std::array<mcdai::EventLoaderClient,16> neoDriftClients;
+static std::array<mwel_drift::SuspensionLease,16> neoDriftPhysics;
+static std::uint64_t neoDriftGeneration=1;
+static mcdai::EventLoaderClient& NeoDriftClient(NeoRuntimeState& row){return neoDriftClients[&row-neoRuntime];}
+static void NeoDriftRelease(NeoRuntimeState& row){
+ NeoDriftClient(row).Reset();auto& lease=neoDriftPhysics[size_t(&row-&neoRuntime[0])];const auto handle=row.handle?row.handle:lease.handle;
+ auto restored=lease.Restore();
+ if(restored==3){lease.failed=true;Log(LogLevel::Warning,"EVENT_DRIFT_SUSPENSION_REFUSED handle=%u restoration_unverified=1",handle);}
+ else if(restored)Log(LogLevel::Info,"EVENT_DRIFT_SUSPENSION_RESTORED handle=%u result=%u",handle,restored);
+ row.driftLearningHold=0;row.driftIntent.Reset();row.driftIntentActive=false;
+ row.nativePowerTrim={};
+ row.nativeTurnDemand.reset();
+ row.driftMotionReady=false;row.driftClearSeconds=-1;row.driftClearAt=0;row.driftBodyRate=row.driftTravelRate=0;
+}
+
 static bool NeoLocalPlayer();
 #include "NeoOwnership.inl"
 static unsigned NeoSelectedController(){
@@ -193,6 +222,8 @@ static bool NeoReadNitrous(void* primary,bool& equipped,float& tank,bool& engage
 static bool NeoDrive(void* primary,float dt){
  if(!neoInstalled||NeoSelectedController()!=2||!MWELNeoCourseEnabled())return false;
  auto* ai=static_cast<unsigned char*>(primary)+0x4C;VehicleSnapshot racer{},player{};
+ if(MWELNeoDetailedLoggingEnabled()) {static ULONGLONG next=0;auto t=GetTickCount64();if(t>=next){next=t+1000;Log(LogLevel::Info,"DRIFT_ENTRY primary=%08X local=%u mode=%u",unsigned(primary),unsigned(NeoLocalPlayer()),MWELNeoDriftMode());}}
+
  // Native stuck/avoidance actions can temporarily replace AIActionRace.
  // Once acquired, retain ownership while exact vehicle/race membership is
  // valid; changing a native sub-action is not permission to resume native AI.
@@ -200,11 +231,29 @@ static bool NeoDrive(void* primary,float dt){
  // Exact live membership already excludes police, traffic, finished and
  // eliminated racers. Reacquisition cannot require AIActionRace: an off-road
  // racer may remain in a native stuck/avoidance action after losing ownership.
- if(!W2CRaceVehicle(ai,racer,player,NeoLocalPlayer(),false,&scopeFailure)){for(auto& s:neoRuntime)if(s.ai==ai&&s.owned){if(neoNitrousInstalled&&s.input)neoOriginalNOS(s.input,false);Log(LogLevel::Info,"MW_NEOAI_RELEASE handle=%u reason=out_of_race_scope ticks=%u scope_failure=%u driver_class=%u",s.handle,s.ticks,scopeFailure,racer.driverClass);s.owned=false;}return false;}
+ bool raceScope=W2CRaceVehicle(ai,racer,player,NeoLocalPlayer(),false,&scopeFailure);
+ // The isolated all-goal observer defers the player result, but native AI
+ // finishers brake inside the trigger. Retain only a previously verified
+ // racer in this SAME race, and only after its genuine goal. The NFRR scope
+ // must have rejected it specifically as finished (8); no other rejection
+ // can enter this bounded zero-power coast. FieldPending is always false
+ // in normal gameplay. Native finish/checkpoint flags remain untouched.
+ if(!raceScope&&scopeFailure==8&&BattleVtable(primary,kRacecarPrimaryVtable)){
+  void* currentRace=nullptr;void* vehicle=nullptr;void* back=nullptr;
+  if(AudioRead(reinterpret_cast<void*>(Address(0x91E000)),&currentRace)&&currentRace&&
+     AudioRead(ai-4,&vehicle)&&BattleVtable(vehicle,0x8AA828)&&
+     AudioRead(static_cast<unsigned char*>(vehicle)+0x54,&back)&&back==ai){
+   for(const auto& prior:neoRuntime)if(prior.ai==ai&&prior.race==currentRace&&MWELNeoHoldingAtGenuineGoal(prior.handle)){
+    racer.pointer=vehicle;racer.handle=prior.handle;racer.driverClass=1;raceScope=true;break;
+   }
+  }
+ }
+ if(!raceScope){if(MWELNeoDetailedLoggingEnabled()){static ULONGLONG next=0;auto t=GetTickCount64();if(t>=next){next=t+1000;Log(LogLevel::Info,"DRIFT_SCOPE_FAILURE primary=%08X failure=%u",unsigned(primary),scopeFailure);}}for(auto& s:neoRuntime)if(s.ai==ai&&s.owned){if(neoNitrousInstalled&&s.input)neoOriginalNOS(s.input,false);Log(LogLevel::Info,"MW_NEOAI_RELEASE handle=%u reason=out_of_race_scope ticks=%u scope_failure=%u driver_class=%u",s.handle,s.ticks,scopeFailure,racer.driverClass);NeoDriftRelease(s);s.owned=false;}return false;}
  void* input=nullptr;void* transmission=nullptr;void* race=nullptr;
  if(!AudioRead(static_cast<unsigned char*>(primary)+0xE0,&input)||!BattleVtable(input,racer.driverClass==kDriverHuman?0x8AC670:0x8AB5C8)||
     !AudioRead(static_cast<unsigned char*>(primary)+0xD4,&transmission)||!transmission||
-    !AudioRead(reinterpret_cast<void*>(Address(0x91E000)),&race))return false;
+    !AudioRead(reinterpret_cast<void*>(Address(0x91E000)),&race)){if(MWELNeoDetailedLoggingEnabled()){static ULONGLONG next=0;auto t=GetTickCount64();if(t>=next){next=t+1000;unsigned vt=0;AudioRead(input,&vt);Log(LogLevel::Info,"DRIFT_INPUT_FAILURE primary=%08X input=%08X vt=%08X driver=%u",unsigned(primary),unsigned(input),vt,racer.driverClass);}}return false;}
+
  // A vehicle may enter this controller while already simplified. Acquire
  // full physics through its guarded native API before reading its body.
  if(neoOriginalPhysicsMode&&BattleVtable(racer.pointer,0x8AA828)){
@@ -213,14 +262,14 @@ static bool NeoDrive(void* primary,float dt){
      reinterpret_cast<int(__thiscall*)(void*)>(Address(0x688210))(racer.pointer)==2)
    neoOriginalPhysicsMode(racer.pointer,1);
  }
- unsigned handle=W2CRaceHandle(racer);NeoBodyMotion body;if(!NeoReadBody(static_cast<BYTE*>(racer.pointer),body))return false;
+ unsigned handle=W2CRaceHandle(racer);NeoBodyMotion body;if(!NeoReadBody(static_cast<BYTE*>(racer.pointer),body)){Log(LogLevel::Info,"DRIFT_BODY_FAILURE handle=%u vehicle=%08X",handle,unsigned(racer.pointer));return false;}
  mwneo::Point pos{body.position[0],body.position[1],body.position[2]},heading{body.heading[0],body.heading[1],body.heading[2]};
  mwneo::Vehicle v;v.handle=handle;v.position=pos;v.heading=heading;v.velocity={body.velocity[0],body.velocity[1],body.velocity[2]};v.speed=mwneo::LengthXZ(v.velocity);v.dt=dt;v.halfWidth=body.halfWidth;v.halfLength=body.halfLength;
  NeoRuntimeState* selected=nullptr;
  for(auto& s:neoRuntime)if(s.ai==ai){selected=&s;break;}
  if(!selected)for(auto& s:neoRuntime)if(!s.owned){selected=&s;break;}if(!selected)return false;
  auto& row=*selected;
- if(row.ai!=ai||row.input!=input||row.handle!=handle||row.race!=race){row={};row.ai=ai;row.input=input;row.handle=handle;row.race=race;}
+ if(row.ai!=ai||row.input!=input||row.handle!=handle||row.race!=race){NeoDriftRelease(row);row={};row.ai=ai;row.input=input;row.handle=handle;row.race=race;}
  auto now=GetTickCount64();bool wasOwned=row.owned;
  row.groundPosition=pos;row.groundExtent=v.halfLength+5.f;
  // The same simulation step may arrive through Driving and the mechanic
@@ -231,14 +280,77 @@ static bool NeoDrive(void* primary,float dt){
  if(!row.simulationStep.Begin(simulation))return row.owned;
  if(previousSimulation>=0&&simulation>previousSimulation)v.dt=std::min(.1f,simulation-previousSimulation);
  if(MWELNeoHoldingAtGenuineGoal(handle)){
-  // A genuine player finish can be deferred solely for full-field evidence.
-  // Keep that car stopped instead of following the newly reset CP sequence.
-  row.owned=true;row.activeAt=now;row.controls={};row.controls.brake=1;row.controls.valid=true;
-  neoWriter=GetCurrentThreadId();neoOriginalInput[0](input,0);neoOriginalInput[1](input,0);neoOriginalInput[2](input,1);neoOriginalInput[3](input,0);
+  const bool motionReady=row.driftMotionReady;
+  const auto priorHeading=row.driftMotionHeading,priorTravel=row.driftMotionTravel;
+  const float priorBodyRate=row.driftBodyRate,priorTravelRate=row.driftTravelRate;
+  if(!row.genuineGoalHeld)NeoDriftRelease(row);
+  // A genuine finish can be deferred solely for full-field evidence.
+  // Do not park inside its goal trigger. Coast without power only while the
+  // real grounded chassis has a fresh complete wall sweep; stop within30m/4s.
+  // This observer path cannot run in production and never follows reset CPs.
+  const auto h=mwneo::UnitXZ(v.heading),t=mwneo::UnitXZ(v.velocity);
+  bool coastSafe=false;
+  if(!row.genuineGoalCoast.done&&motionReady&&v.dt>0&&v.dt<=.1f){
+   const float bodyRate=std::atan2(mwneo::CrossXZ(priorHeading,h),mwneo::DotXZ(priorHeading,h))/v.dt;
+   const float travelRate=std::atan2(mwneo::CrossXZ(priorTravel,t),mwneo::DotXZ(priorTravel,t))/v.dt;
+   row.driftBodyRate=priorBodyRate+(bodyRate-priorBodyRate)*v.dt/(.12f+v.dt);
+   row.driftTravelRate=priorTravelRate+(travelRate-priorTravelRate)*v.dt/(.12f+v.dt);
+   unsigned wheels=0;
+   coastSafe=mwel_drift::SuspensionLease::Read(unsigned(racer.pointer)+0x84,wheels)&&wheels>=3&&wheels<=4&&
+    MWELNeoDriftClearSeconds(body.position,body.heading,body.velocity,v.halfWidth,v.halfLength,row.driftBodyRate,row.driftTravelRate)==.8f;
+  }
+  row.driftMotionReady=motionReady;row.driftMotionHeading=h;row.driftMotionTravel=t;
+  const bool wasDone=row.genuineGoalCoast.done;
+  const bool coast=row.genuineGoalCoast.Step(pos,v.speed,now,coastSafe);
+  if(!wasDone&&row.genuineGoalCoast.done)Log(LogLevel::Info,"EVENT_NEOAI_GENUINE_GOAL_COAST_END handle=%u position=%.3f,%.3f,%.3f travelled=%.3f throttle=0 native_pose_writes=0",handle,pos.x,pos.y,pos.z,mwneo::Distance(pos,row.genuineGoalCoast.origin));
+  row.owned=true;row.activeAt=now;row.controls={};row.controls.brake=coast?0.f:1.f;row.controls.valid=true;
+  neoWriter=GetCurrentThreadId();neoOriginalInput[0](input,0);neoOriginalInput[1](input,0);neoOriginalInput[2](input,row.controls.brake);neoOriginalInput[3](input,0);
   if(neoNitrousInstalled)neoOriginalNOS(input,false);row.nitrous.pressed=false;neoWriter=0;++row.ticks;
-  if(!row.genuineGoalHeld){row.genuineGoalHeld=true;Log(LogLevel::Info,"EVENT_NEOAI_GENUINE_GOAL_HOLD handle=%u native_finished_flag_written=0 native_timer_written=0 throttle=0 brake=1",handle);}
+  if(!row.genuineGoalHeld){row.genuineGoalHeld=true;Log(LogLevel::Info,"EVENT_NEOAI_GENUINE_GOAL_HOLD handle=%u native_finished_flag_written=0 native_timer_written=0 throttle=0 brake=%.1f bounded_native_coast=%u",handle,row.controls.brake,unsigned(coast));}
   return true;
  }
+ const auto driftMode=MWELNeoDriftMode();
+ static auto engineTestModule=GetModuleHandleW(L"MWEventLoader.asi");using PlayerEngineTest=unsigned(__cdecl*)();
+ static auto engineTest=engineTestModule?reinterpret_cast<PlayerEngineTest>(GetProcAddress(engineTestModule,"MWEL_PlayerEngineTestV1")):nullptr;
+ const bool playerEngineTest=racer.driverClass==kDriverHuman&&engineTest&&engineTest();
+ const bool playerPadEngineTest=playerEngineTest&&engineTest()==2;
+ if(playerEngineTest&&driftMode){
+  // Release a prior AI physics lease once. Releasing on every input frame
+  // erased the corner filter/entry timer and invalidated the player test.
+  if(row.driftSelected)NeoDriftRelease(row);
+  row.driftSelected=false;
+ }
+ else if(!driftMode||(racer.driverClass==kDriverHuman&&!NeoLocalPlayer())){NeoDriftRelease(row);row.driftSelected=false;}
+ else if(racer.driverClass==kDriverHuman&&NeoLocalPlayer())row.driftSelected=true;
+ else if(!row.driftSelected){
+  unsigned selectedCount=0;for(const auto& other:neoRuntime)if(other.driftSelected&&other.input&&BattleVtable(other.input,0x8AB5C8))++selectedCount;
+  row.driftSelected=selectedCount<MWELNeoDriftLimit();
+ }
+  if(row.driftSelected&&!NeoDriftClient(row).Available()){NeoDriftClient(row).Reset();row.driftSelected=false;}
+  if(row.driftSelected){
+  auto& physics=neoDriftPhysics[size_t(&row-&neoRuntime[0])];
+  const bool previouslyFailed=physics.failed;
+   // Special now adjusts native tyre attributes. Preserve the car's original
+   // suspension: replacing Player with Racer changes the actual tyre model.
+   // Arcade retains its previously validated suspension lease.
+   unsigned result=0;
+   if(driftMode==2){
+    if(physics.active){const auto restored=physics.Restore();result=restored==1?1:restored==3?2:0;}
+    const auto type=mwel_drift::SuspensionLease::Vtable(unsigned(racer.pointer));
+    if(type!=0x8abc30&&type!=0x8abac8)result=2;
+   }else result=physics.Ensure(unsigned(racer.pointer),handle);
+  if(result==2){if(!previouslyFailed)Log(LogLevel::Warning,"EVENT_DRIFT_SUSPENSION_REFUSED handle=%u",handle);row.driftSelected=false;}
+  else if(result==1){
+   Log(LogLevel::Info,"EVENT_DRIFT_SUSPENSION_CHANGED handle=%u mode=%u native_type=%08X original_override=%u original_value=%08X body_AI_unchanged=1 resample_next_tick=1",handle,driftMode,mwel_drift::SuspensionLease::Vtable(unsigned(racer.pointer)),unsigned(physics.previousPresent),physics.previousValue);
+    row.owned=true;row.activeAt=now;row.sampled=0;row.driver.Reset();row.driftIntent.Reset();row.driftLearningHold=0;
+   neoWriter=GetCurrentThreadId();neoOriginalInput[0](input,0);neoOriginalInput[1](input,0);neoOriginalInput[2](input,.1f);neoOriginalInput[3](input,0);
+   if(neoNitrousInstalled)neoOriginalNOS(input,false);neoWriter=0;++row.ticks;return true;
+  }
+ }
+ mcdai::StateV1 driftFeedback;
+ const bool driftFeedbackValid=row.driftSelected&&NeoDriftClient(row).Read(driftFeedback)==mcdai::Ok;
+ if(row.driftIntentActive||(driftFeedbackValid&&driftFeedback.phase==2&&driftFeedback.eligible))row.driftLearningHold=.5f;
+ else row.driftLearningHold=std::max(0.f,row.driftLearningHold-v.dt);
  row.driver.gripGuard=true;
 #ifdef MWEL_NEO_OBSERVE_ONLY
  const auto observedPriorControls=row.controls;
@@ -246,14 +358,18 @@ static bool NeoDrive(void* primary,float dt){
  v.steering=row.controls.steering;
  v.steeringGain=row.driver.response.gain;
  v.recovery=row.driver.recovery;
+ const float measuredBeta=v.speed>1?std::atan2(mwneo::CrossXZ(mwneo::UnitXZ(v.heading),mwneo::UnitXZ(v.velocity)),mwneo::DotXZ(mwneo::UnitXZ(v.velocity),mwneo::UnitXZ(v.heading))):0;
+ const bool driftPlanning=(playerEngineTest||(row.driftSelected&&driftFeedbackValid&&driftFeedback.calibrated))&&std::abs(measuredBeta)<.8f;
+ auto planningVehicle=NeoDriftPlanningVehicle(v,driftPlanning,true);
+ if(driftPlanning)planningVehicle.steering=row.driver.steering;
  bool diagnostic=NeoDiagnosticTarget(row);
  if(diagnostic&&!row.diagnosticAt)row.diagnosticAt=now;
  if(diagnostic)NeoDiagnosticOrder(row,"NEO_UPDATE_BEGIN",neoDrivingCaller);
  if((!diagnostic||neoDiagnosticMode==3||neoDiagnosticMode==6)&&(!row.sampled||now-row.sampled>=50)){
   using Query=unsigned(__cdecl*)(const mwneo::Vehicle*,mwneo::Guidance*);
   bool ownedProvider=false;auto module=NeoProviderModule(ownedProvider);static Query query=nullptr;if(!query&&module)query=reinterpret_cast<Query>(GetProcAddress(module,"MWEL_NeoGuidanceV1"));
-  mwneo::Guidance next;unsigned status=module&&query?query(&v,&next):0;
-  if(!status){if(!wasOwned)return false;++row.guidanceFailures;row.guidance.status=2;}
+  mwneo::Guidance next;unsigned status=module&&query?query(&planningVehicle,&next):0;
+  if(!status){if(!wasOwned){static ULONGLONG next=0;auto t=GetTickCount64();if(MWELNeoDetailedLoggingEnabled()&&t>=next){next=t+1000;Log(LogLevel::Info,"DRIFT_GUIDANCE_FAILURE handle=%u module=%08X query=%08X status=%u",handle,unsigned(module),unsigned(query),status);}return false;}++row.guidanceFailures;row.guidance.status=2;}
   else row.guidance=next;row.sampled=now;
   if(!wasOwned&&status)Log(LogLevel::Info,"EVENT_NEOAI_PROVIDER_BOUND handle=%u owner=%s fallback_to_world_on_failure=0",handle,ownedProvider?"NFSMWEventLoader":"World2MWNativeLoader");
  }
@@ -264,9 +380,94 @@ static bool NeoDrive(void* primary,float dt){
  }
  mwneo::Profile profile;using GetProfile=unsigned(__cdecl*)(mwneo::Profile*,unsigned);bool ownedProvider=false;auto module=NeoProviderModule(ownedProvider);
  static GetProfile getProfile=nullptr;if(!getProfile&&module)getProfile=reinterpret_cast<GetProfile>(GetProcAddress(module,"MWEL_NeoProfileV1"));if(module&&getProfile)getProfile(&profile,sizeof(profile));
- if(diagnostic&&neoDiagnosticMode!=3)NeoDiagnosticControls(row,v,now);else row.controls=row.driver.Update(v,row.guidance,profile);
+  if(row.driftSelected||playerEngineTest){
+   row.powerScale=1.f;profile.lateralAccel=driftMode==2?mwel_drift_speed::LateralAcceleration:30.f;profile.maxSpeed=mwel_drift_speed::Maximum;
+   if(row.driftSteeringLock==0&&mwel_drift::SuspensionLease::SteeringLock(unsigned(racer.pointer),row.driftSteeringLock))
+    Log(LogLevel::Info,"DRIFT_STEERING_GEOMETRY handle=%u assumed_radians=%.6f measured_radians=%.6f native_handling_writes=0",handle,profile.steeringLock,row.driftSteeringLock);
+   if(row.driftSteeringLock>0)profile.steeringLock=row.driftSteeringLock;
+  }
+ using NativeHandlingVersion=unsigned(__cdecl*)();static NativeHandlingVersion nativeHandlingVersion=nullptr;
+ if(!nativeHandlingVersion){if(auto drift=GetModuleHandleW(L"MWArcadeDrift.asi"))nativeHandlingVersion=reinterpret_cast<NativeHandlingVersion>(GetProcAddress(drift,"MWArcadeDriftNativeHandlingVersionV1"));}
+ const bool nativeTurnInput=nativeHandlingVersion&&nativeHandlingVersion()==1&&(playerPadEngineTest||(driftMode==2&&row.driftSelected&&mwel_drift::SuspensionLease::Vtable(unsigned(racer.pointer))==0x8abc30));
+ // The stock response learner expects wheel lock, not a requested yaw rate.
+ // Feeding turn requests into that learner falsely reduces grip to its floor.
+ if(diagnostic&&neoDiagnosticMode!=3)NeoDiagnosticControls(row,v,now);else row.controls=row.driver.Update(planningVehicle,row.guidance,profile,nativeTurnInput||row.driftLearningHold>0);
+ float driftHandbrake=0;
+  float driftRoadCurve=std::numeric_limits<float>::quiet_NaN(),driftRoadPeak=0,driftRoadSpeed=std::numeric_limits<float>::quiet_NaN();bool driftEntryPrepared=false;const float driftPosition[]={pos.x,pos.y,pos.z};
+  if(row.driftSelected||playerEngineTest)MWELNeoDriftRoadCurve(handle,row.guidance.edge,driftPosition,std::max(60.f,v.speed*3.f),&driftRoadCurve,&driftRoadPeak,&driftEntryPrepared,v.speed,profile.brakeDecel,&driftRoadSpeed);
+  // The marked lab drives the ORIGINAL human suspension through normal
+  // inputs. Do not turn it into SuspensionRacer merely to automate a test.
+  unsigned playerWheels=0;
+  const bool playerPhysicalSafe=playerEngineTest&&mwel_drift::SuspensionLease::Read(unsigned(racer.pointer)+0x84,playerWheels)&&playerWheels>=3&&playerWheels<=4;
+  // Special uses native tyre forces: the old correction controller's phase
+  // cannot decide whether the real chassis is already sliding.
+  const bool measuredSlide=driftMode==2||playerEngineTest;
+  // The native steering path is active above 5m/s. Its unwind state also
+  // needs real angular samples below the 12m/s drift-entry threshold.
+  if(driftMode==2&&(playerEngineTest||row.driftSelected)&&v.speed>5&&v.recovery==mwneo::Recovery::Normal&&row.controls.recovery==mwneo::Recovery::Normal){
+   const auto h=mwneo::UnitXZ(v.heading),t=mwneo::UnitXZ(v.velocity);
+   if(row.driftMotionReady&&v.dt>0&&v.dt<=.1f){
+    const float bodyRate=std::atan2(mwneo::CrossXZ(row.driftMotionHeading,h),mwneo::DotXZ(row.driftMotionHeading,h))/v.dt;
+    const float travelRate=std::atan2(mwneo::CrossXZ(row.driftMotionTravel,t),mwneo::DotXZ(row.driftMotionTravel,t))/v.dt;
+    row.driftBodyRate+=(bodyRate-row.driftBodyRate)*v.dt/(.12f+v.dt);
+    row.driftTravelRate+=(travelRate-row.driftTravelRate)*v.dt/(.12f+v.dt);
+    if(v.speed>12){
+     if(now-row.driftClearAt>=50){row.driftClearAt=now;row.driftClearSeconds=MWELNeoDriftClearSeconds(body.position,body.heading,body.velocity,v.halfWidth,v.halfLength,row.driftBodyRate,row.driftTravelRate);}
+    }else {row.driftClearSeconds=-1;row.driftClearAt=0;}
+   }
+   row.driftMotionHeading=h;row.driftMotionTravel=t;row.driftMotionReady=true;
+  }else {row.driftMotionReady=false;row.driftClearSeconds=-1;row.driftClearAt=0;row.driftBodyRate=row.driftTravelRate=0;}
+  row.driftIntentActive=(playerEngineTest||(row.driftSelected&&driftFeedbackValid))&&row.driftIntent.Apply(driftMode,v,row.guidance,profile,playerEngineTest||driftFeedback.calibrated!=0,measuredSlide?std::abs(measuredBeta)>.15f:driftFeedback.phase==2,measuredBeta,row.controls,driftHandbrake,driftRoadCurve,playerEngineTest?playerPhysicalSafe:driftFeedback.eligible!=0,driftRoadPeak,driftEntryPrepared,row.driftClearSeconds,row.driftMotionReady?-row.driftBodyRate:std::numeric_limits<float>::quiet_NaN(),driftRoadSpeed);
+  const float travelSteering=row.controls.steering;
+  if(row.driftIntent.nativeRetryResumed)Log(LogLevel::Info,"EVENT_NEOAI_NATIVE_CONTINUATION handle=%u beta=%.5f speed=%.3f line_error=%.3f room=%.3f clear_seconds=%.3f attempts=%u handbrake=%.3f native_pose_writes=0",handle,measuredBeta,v.speed,row.driftIntent.retryLineError,row.driftIntent.retryRoom,row.driftClearSeconds,row.driftIntent.attempts,driftHandbrake);
+  // Keep the grip planner's internal actuator state in its travel frame
+  // while the drift controller owns the real steering. A stale grip input
+  // must not become the first command after a controlled exit.
+  if(!nativeTurnInput&&driftMode==2&&driftPlanning&&(row.driftIntentActive||row.driftIntent.rejection==18)&&profile.steeringLock>.1f)
+   row.driver.steering=std::clamp(row.controls.steering-measuredBeta/profile.steeringLock,-1.f,1.f);
+  if(NeoDriftGripHandoff(driftPlanning,row.driftIntentActive,playerEngineTest||NeoDriftSteeringFeedback(driftFeedbackValid,driftFeedback.reason),row.driftIntent.rejection,v,measuredBeta,profile,row.controls)&&MWELNeoDetailedLoggingEnabled()){
+   static ULONGLONG next[16]{};auto index=size_t(&row-&neoRuntime[0]);
+   if(now>=next[index]&&std::abs(measuredBeta)>.15f){next[index]=now+500;Log(LogLevel::Info,"EVENT_NEOAI_DRIFT_HANDOFF handle=%u beta=%.5f travel_steering=%.4f chassis_steering=%.4f brake=%.3f throttle=%.3f reason=%u feedback_reason=%u body_correction=0",handle,measuredBeta,travelSteering,row.controls.steering,row.controls.brake,row.controls.throttle,row.driftIntent.rejection,driftFeedback.reason);}
+  }
+
+ const bool wasNativeUnwind=row.driftIntent.nativeRecovery.active;
+ const bool nativeUnwind=row.driftIntent.nativeRecovery.Update(nativeTurnInput&&driftMode==2&&row.controls.valid&&!row.controls.reverse&&row.controls.recovery==mwneo::Recovery::Normal&&v.speed>5,
+  measuredBeta,row.driftMotionReady?-row.driftBodyRate:std::numeric_limits<float>::quiet_NaN(),v.dt);
+ if(nativeUnwind){
+  if(!wasNativeUnwind)row.driftIntent.StopAttempt();
+  // Zero requested yaw retains the player's existing native countersteer
+  // feedback. Never pass an emergency wheel-lock value as a yaw request.
+  row.controls.steering=0;driftHandbrake=0;row.controls.throttle=std::min(row.controls.throttle,.55f);
+  row.driftIntentActive=false;row.driftIntent.rejection=19;
+ }else if(nativeTurnInput&&row.controls.valid&&!row.controls.reverse&&row.controls.recovery==mwneo::Recovery::Normal&&v.speed>5&&driftHandbrake<=.2f){
+  // Native Player tyre model: request a turn through the same steering
+  // feedback as a human. Never stack two countersteering controllers.
+  // Human automatic inputs remain restricted to the marked no-save lab.
+  const auto travel=mwneo::UnitXZ(v.velocity),aim=mwneo::Sub(row.guidance.aim,v.position);
+  const float distance2=mwneo::DotXZ(aim,aim);
+  if(distance2>4&&mwneo::Finite(aim)){
+   const float arc=2*mwneo::CrossXZ(travel,aim)/distance2;
+   const float requestedYaw=std::clamp(-arc*v.speed,-mcd::NativeDriftTurnLimit,mcd::NativeDriftTurnLimit);
+   const float ledYaw=NeoNativeSlipLead(driftMode==2&&row.driftMotionReady,requestedYaw,
+       measuredBeta,row.driftTravelRate-row.driftBodyRate);
+   row.controls.steering=-ledYaw/mcd::NativeDriftTurnLimit;
+   // Do not request an arc that the bounded native steering cannot execute.
+   // Ordinary pedals shed excess entry speed; no velocity/pose mutation.
+   if(std::abs(arc)>.001f){
+    const float cap=std::max(8.f,mcd::NativeDriftTurnLimit/std::abs(arc));
+    if(v.speed>cap+1){row.controls.throttle=0;row.controls.brake=std::max(row.controls.brake,std::clamp((v.speed-cap-1)*.08f,0.f,.6f));}
+   }
+  }
+ }
+ const float beforePowerTrim=row.controls.throttle;
+ row.controls.throttle=row.nativePowerTrim.Step(nativeTurnInput&&driftMode==2&&
+  (racer.driverClass!=kDriverHuman||playerEngineTest)&&row.controls.valid&&!row.controls.reverse&&
+  row.controls.recovery==mwneo::Recovery::Normal&&v.recovery==mwneo::Recovery::Normal&&
+  row.guidance.status==1&&row.driftMotionReady&&v.speed>5&&driftHandbrake<=.2f,
+  v.dt,row.controls.throttle,measuredBeta,row.driftTravelRate-row.driftBodyRate);
+ const bool nativePowerTrimmed=row.controls.throttle<beforePowerTrim;
  if(!row.controls.valid){row.controls={};row.controls.brake=.4f;++row.guidanceFailures;}
- if(!diagnostic&&row.jam.Update(v,row.guidance,row.driver.recovery)){
+ if(!diagnostic&&row.jam.Update(v,row.guidance,row.driver.recovery,nativeTurnInput&&driftMode==2)){
   using Recover=unsigned(__cdecl*)(const mwneo::Vehicle*,void*);
   auto recover=module?reinterpret_cast<Recover>(GetProcAddress(module,"MWEL_NeoRecoverV1")):nullptr;
   unsigned result=recover?recover(&v,ai):0;float age=row.jam.age;row.jam.Attempted();
@@ -281,6 +482,9 @@ static bool NeoDrive(void* primary,float dt){
   }else {++row.respawnRefused;if(result==2)row.sampled=0;}
   Log(LogLevel::Info,"MW_NEOAI_RECOVERY_RESULT handle=%u stalled_physics_seconds=%.3f native_respawn_result=%u respawns=%u refused=%u native_driving_handoff=0",handle,age,result,row.respawns,row.respawnRefused);
   if(result){
+   // A placement does not retire this vehicle. Keep the suspension stable.
+   NeoDriftClient(row).Pause();row.driftLearningHold=0;row.driftIntent.Reset();row.driftIntentActive=false;
+   row.driftMotionReady=false;row.driftClearSeconds=-1;row.driftClearAt=0;row.driftBodyRate=row.driftTravelRate=0;
    // The old pose/guidance belong to the jam location. Stop this tick and
    // query the measured post-respawn pose before applying any throttle.
    neoOriginalInput[0](input,0);neoOriginalInput[1](input,0);neoOriginalInput[2](input,.4f);neoOriginalInput[3](input,0);
@@ -311,23 +515,51 @@ static bool NeoDrive(void* primary,float dt){
   if(MWELNeoDiagnosticWheelCount(racer.pointer,coastState)==0)row.controls.throttle=0;
  }
 #endif
+ // Same requested-turn slew as human Pad input. The physical yaw/slip
+ // feedback runs afterwards, unfiltered, in the native tyre call. Keep an
+ // independent state per racer and bypass immediate unwind/recovery/HB.
+ const float nativeTurnRequested=row.controls.steering;
+ row.controls.steering=row.nativeTurnDemand.step(handle,now,v.dt,row.controls.steering,
+  nativeTurnInput&&driftMode==2&&row.driftSelected&&racer.driverClass!=kDriverHuman&&
+  row.controls.valid&&!row.controls.reverse&&row.controls.recovery==mwneo::Recovery::Normal&&
+  !nativeUnwind&&v.speed>5&&driftHandbrake<=.2f);
+ #ifdef MWEL_NATIVE_FULL_THROTTLE_PROBE
+ // Isolated laboratory pedal stimulus. Requires the existing no-save Pad
+ // engine-test marker; never enabled in the ordinary/release build. Retain
+ // braking, handbrake and recovery vetoes, but replace coasting with full gas.
+ if(playerPadEngineTest&&driftMode==2&&row.controls.valid&&!reverse&&
+    row.controls.recovery==mwneo::Recovery::Normal&&v.recovery==mwneo::Recovery::Normal&&
+    v.speed>5&&row.controls.brake<.01f&&driftHandbrake<.01f)row.controls.throttle=1;
+ #endif
  neoWriter=GetCurrentThreadId();
+ // PlayerEngineTest uses the same input-only drift planner above while
+ // retaining SuspensionPlayer, real native controls and normal safety gates.
  // MW's IInput steering sign is opposite to the raw X/Z bicycle model.
  // Verified from live heading delta for both Human and Racecar inputs.
  neoOriginalInput[0](input,-row.controls.steering);
  neoOriginalInput[1](input,row.controls.throttle);
  neoOriginalInput[2](input,row.controls.brake);
- neoOriginalInput[3](input,0);
+ neoOriginalInput[3](input,driftHandbrake);
  if(neoNitrousInstalled){
   row.nosRead=NeoReadNitrous(primary,row.nosEquipped,row.nosTank,row.nosEngaged,row.nosBoost);
 #ifdef MWEL_NEO_AIR_COAST_EXPERIMENT
-  bool pressed=neoDifficulty.nitrous&&!diagnostic&&row.nosRead&&row.nitrous.Update(v,row.guidance,profile,nitrousControlsBeforeCoast,row.nosEquipped,row.nosTank);
+  bool pressed=neoDifficulty.nitrous&&!row.driftSelected&&!playerEngineTest&&!diagnostic&&row.nosRead&&row.nitrous.Update(v,row.guidance,profile,nitrousControlsBeforeCoast,row.nosEquipped,row.nosTank);
 #else
-  bool pressed=neoDifficulty.nitrous&&!diagnostic&&row.nosRead&&row.nitrous.Update(v,row.guidance,profile,row.controls,row.nosEquipped,row.nosTank);
+  bool pressed=neoDifficulty.nitrous&&!row.driftSelected&&!playerEngineTest&&!diagnostic&&row.nosRead&&row.nitrous.Update(v,row.guidance,profile,row.controls,row.nosEquipped,row.nosTank);
 #endif
   row.nitrous.pressed=pressed;neoOriginalNOS(input,pressed);
   if(pressed)row.nosRequestedSeconds+=std::clamp(v.dt,0.f,.1f);
   if(row.nosRead&&row.nosEngaged)row.nosEngagedSeconds+=std::clamp(v.dt,0.f,.1f);
+ }
+ const bool driftAllowed=row.owned&&row.controls.valid&&!row.controls.reverse&&row.controls.recovery==mwneo::Recovery::Normal&&row.guidance.status==1;
+ mcdai::IntentV1 driftRequest;driftRequest.active=row.driftIntentActive?1u:0u;
+  driftRequest.pathYaw=row.driftIntent.pathYaw;
+  driftRequest.targetSlip=row.driftIntent.targetSlip;
+ auto driftResult=NeoDriftClient(row).Frame(unsigned(reinterpret_cast<std::uintptr_t>(racer.pointer)),handle,
+   row.driftSelected?driftMode:0,unsigned(reinterpret_cast<std::uintptr_t>(race)),neoDriftGeneration,row.owned&&!row.genuineGoalHeld,driftAllowed,racer.driverClass==kDriverHuman,&driftRequest,row.driftIntent.pathStrength);
+ if(MWELNeoDetailedLoggingEnabled()&&(row.driftSelected||playerEngineTest)&&now>=row.driftLogged){
+  row.driftLogged=now+100;
+  Log(LogLevel::Info,"EVENT_NEOAI_DRIFT handle=%u mode=%u result=%u correction_allowed=%u feedback=%u phase=%u applied=%u beta=%.5f speed=%.3f learning_hold=%.3f intent=%u steering=%.4f planned_curve=%.5f drift_road_curve=%.5f lateral=%.3f widths=%.3f,%.3f obstacle=%.3f rejection=%u path_yaw=%.5f travel_rate=%.5f steer_trim=%.5f wall_clear_seconds=%.4f body_rate=%.5f motion_rate=%.5f attempts=%u retry_settle=%.4f retry_line=%.4f retry_room=%.4f retry_aligned=%u power_entry=%u exit_resumed=%u power_entries=%u native_power_trimmed=%u native_turn_requested=%.5f",handle,driftMode,unsigned(driftResult),unsigned(driftAllowed),unsigned(driftFeedbackValid),driftFeedback.phase,driftFeedback.applied,measuredBeta,v.speed,row.driftLearningHold,unsigned(row.driftIntentActive),row.controls.steering,row.controls.curvature,row.driftIntent.roadCurve,row.guidance.lateralError,row.guidance.samples[0].widthLeft,row.guidance.samples[0].widthRight,row.guidance.obstacleDistance,row.driftIntent.rejection,row.driftIntent.pathYaw,row.driftIntent.measuredTravelRate,row.driftIntent.physicalSteerTrim,row.driftClearSeconds,row.driftBodyRate,row.driftTravelRate,row.driftIntent.attempts,row.driftIntent.settle,row.driftIntent.retryLineError,row.driftIntent.retryRoom,unsigned(row.driftIntent.retryAligned),unsigned(row.driftIntent.powerEntry),unsigned(row.driftIntent.nativeExitResumed),row.driftIntent.powerEntries,unsigned(nativePowerTrimmed),nativeTurnRequested);
  }
  neoWriter=0;++row.ticks;
 #ifdef MWEL_NEO_OBSERVE_ONLY
@@ -383,7 +615,7 @@ static bool NeoDrive(void* primary,float dt){
 static bool NeoOwnedFailure(void* primary){
  auto* ai=static_cast<unsigned char*>(primary)+0x4C;
  for(auto& s:neoRuntime)if(s.ai==ai&&s.owned){
-  ++s.guidanceFailures;s.activeAt=GetTickCount64();neoWriter=0;
+  NeoDriftRelease(s);++s.guidanceFailures;s.activeAt=GetTickCount64();neoWriter=0;
   // An owned controller fault cannot silently hand steering back to native AI.
   if(s.guidanceFailures==1||s.guidanceFailures%120==0)Log(LogLevel::Error,"MW_NEOAI_SAFE_STOP handle=%u reason=controller_fault failures=%u",s.handle,s.guidanceFailures);
   __try{neoOriginalInput[1](s.input,0);neoOriginalInput[2](s.input,.5f);neoOriginalInput[3](s.input,0);if(neoNitrousInstalled)neoOriginalNOS(s.input,false);}__except(EXCEPTION_EXECUTE_HANDLER){}

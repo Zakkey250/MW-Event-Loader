@@ -147,6 +147,74 @@ bool MWELNeoRouteProgress(unsigned handle,unsigned edge,float* station,unsigned*
   *station=state.station;if(revision)*revision=state.routeRevision;return true;
  }return false;
 }
+#include "NeoDriftRoad.h"
+#include "NeoDriftSweep.h"
+float MWELNeoDriftClearSeconds(const float* position,const float* heading,const float* velocity,float halfWidth,float halfLength,float bodyRate,float travelRate){
+ using namespace event_neo_provider;
+ if(!position||!heading||!velocity||MWELNeoDriftMode()!=2||!EventGeometryAvailable())return -1;
+ mwneo::Vehicle v;v.position={position[0],position[1],position[2]};v.heading={heading[0],heading[1],heading[2]};v.velocity={velocity[0],velocity[1],velocity[2]};v.speed=mwneo::LengthXZ(v.velocity);v.halfWidth=halfWidth;v.halfLength=halfLength;
+ BeginYellowBarrierQuery({v.position.x,v.position.y,v.position.z});
+ CollisionWorld::RayQueryScope queries(collision);
+ return NeoDriftSweep(v,bodyRate,travelRate,[&](mwneo::Point a,mwneo::Point b,mwneo::Point center){
+  Vec3 from{a.x,a.y,a.z},to{b.x,b.y,b.z},body{center.x,center.y,center.z};
+  return YellowWorldWallCorridor(collision,from,to,.05f,false,.05f,&body,nullptr)&&
+   YellowEditorWallCorridor(from,to,.05f,false,.05f,&body);
+ });
+}
+bool MWELNeoDriftForecastRoute(unsigned handle,unsigned laps,mwel_drift_forecast::Route& out){
+ using namespace event_neo_provider;out={};
+ if(!MWELNeoDriftMode()||!laps||laps>100)return false;
+ for(const auto& state:neoProviders)if(state.key==handle&&state.race==*reinterpret_cast<void**>(0x91E000)&&state.leg>=0&&unsigned(state.leg)<state.driftOrigins.size()&&state.driftShape.size()>=3){
+  out.length=state.driftShape.back().station;out.station=state.station+state.driftOrigins[state.leg];out.lap=state.lap;out.laps=laps;
+  if(!std::isfinite(out.length)||out.length<1||out.length>160000)return false;
+  // Copy immutable course curvature at bounded 5m intervals, plus the end.
+  for(float s=0;s<out.length;s+=5)out.knots.push_back({s,NeoDriftRoadCurvature(state.driftShape,s)});
+  out.knots.push_back({out.length,NeoDriftRoadCurvature(state.driftShape,out.length)});
+  return mwel_drift_forecast::Valid(out);
+ }return false;
+}
+bool MWELDriftWallClearance(const float* position,const float* heading,float halfWidth,float halfLength,float* clearance){
+ using namespace event_neo_provider;
+ if(!position||!heading||!clearance||!MWELNeoDriftMode()||!EventGeometryAvailable())return false;
+ for(unsigned i=0;i<3;++i)if(!std::isfinite(position[i])||!std::isfinite(heading[i]))return false;
+ const float norm=std::hypot(heading[0],heading[2]);if(norm<.9f||!std::isfinite(halfWidth)||!std::isfinite(halfLength)||halfWidth<.2f||halfWidth>5||halfLength<.5f||halfLength>12)return false;
+ const float fx=heading[0]/norm,fz=heading[2]/norm;*clearance=10000;
+ CollisionWorld::RayQueryScope queries(collision);
+ for(float along:{-.8f,0.f,.8f})for(float side:{-1.f,1.f}){
+  Vec3 from{position[0]+fx*halfLength*along-fz*halfWidth*side,position[1]+.3f,position[2]+fz*halfLength*along+fx*halfWidth*side};
+  Vec3 to{from.x-fz*1.5f*side,from.y,from.z+fx*1.5f*side};RayHit hit;
+  if(collision.Ray(from,to,hit,false,true)&&std::abs(hit.normal.y)<.5f)*clearance=std::min(*clearance,hit.fraction*1.5f);
+ }
+ return true;
+}
+bool MWELNeoDriftRoadCurve(unsigned handle,unsigned edge,const float* position,float previewDistance,float* curve,float* peak,bool* entryPrepared,float speed,float decel,float* roadSpeed){
+ using namespace event_neo_provider;
+  if(!position||!curve||!peak||!std::isfinite(previewDistance)||previewDistance<0||previewDistance>400)return false;
+ for(auto& state:neoProviders)if(state.key==handle&&state.leg==int(edge)&&state.race==*reinterpret_cast<void**>(0x91E000)){
+  const auto& road=state.grounded;if(road.size()<3)return false;
+  float station=state.station;
+  if(!NeoProjectRoad(road,{position[0],position[1],position[2]},station,station,40,8,90))return false;
+  const auto source=state.roads.find(int(edge));if(source==state.roads.end())return false;
+  const auto& knots=state.through.empty()?source->second.points:state.through;
+    const bool completeShape=!state.driftShape.empty()&&edge<state.driftOrigins.size();
+    const auto& curvatureRoad=completeShape?state.driftShape:knots;
+    const float curvatureStation=station+(completeShape?state.driftOrigins[edge]:0);
+    *curve=NeoDriftRoadCurvature(curvatureRoad,curvatureStation+8);
+    *peak=NeoDriftRoadPeak(curvatureRoad,curvatureStation,previewDistance);
+    if(roadSpeed)*roadSpeed=NeoDriftRoadSpeed(curvatureRoad,curvatureStation,previewDistance,speed,decel);
+    if(entryPrepared){
+     *entryPrepared=false;
+     Vec3 before{},after{},center{};
+     if(YellowLineSample(knots,station,center)&&YellowLineSample(knots,std::max(knots.front().station,station-3),before)&&YellowLineSample(knots,std::min(knots.back().station,station+3),after)){
+      auto tangent=mwneo::UnitXZ({after.x-before.x,0,after.z-before.z});
+      float lateral=mwneo::CrossXZ(tangent,{position[0]-center.x,0,position[2]-center.z});
+      *entryPrepared=mwel_drift_line::EntryPrepared(state.driftBends,station,lateral)&&state.lineAcceptedAt&&GetTickCount64()-state.lineAcceptedAt<1000;
+      if(MWELNeoDetailedLoggingEnabled()&&GetTickCount64()-state.driftLineLogged>=500){state.driftLineLogged=GetTickCount64();Log("DRIFT_LINE_PHASE handle=%u CP=%u station=%.3f global_station=%.3f lateral=%.3f nominal_offset=%.3f window_ready=%u line_age=%llu entry_ready=%u bends=%u",handle,edge,station,curvatureStation,lateral,mwel_drift_line::Offset(state.driftBends,station,0),unsigned(mwel_drift_line::EntryPrepared(state.driftBends,station,lateral)),state.lineAcceptedAt?GetTickCount64()-state.lineAcceptedAt:~0ull,unsigned(*entryPrepared),unsigned(state.driftBends.size()));}
+     }
+    }
+    return std::isfinite(*curve)&&std::isfinite(*peak);
+ }return false;
+}
 #pragma comment(linker,"/EXPORT:MWEL_NeoProfileV1=_MWEL_NeoProfileV1")
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_NeoProfileV1(mwneo::Profile* out,unsigned size){
  if(!out||size!=sizeof(*out))return 0;event_neo_provider::LoadSettings();*out=event_neo_provider::neoSettings.profile;return 1;

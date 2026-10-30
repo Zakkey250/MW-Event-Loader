@@ -2,11 +2,15 @@
 #include "CombatUiAsset.h"
 #include "GauntletUiAsset.h"
 #include "HotPursuitUiAsset.h"
+#include "DriftUiAsset.h"
+#include "DriftHudAsset.h"
+#include "DriftDigitAsset.h"
 #include "EventPresentationPolicy.h"
 namespace event_presentation {
 using Package=mwel::EventPackage;
 thread_local const Package* pending=nullptr;
 void* resource=nullptr;void* gauntletResource=nullptr;void* hotPursuitResource=nullptr;
+void* driftResource=nullptr;void* driftHudResource=nullptr;void* driftDigitResource=nullptr;bool driftNeeded=false;
 bool needed=false,armsNeeded=false,gauntletNeeded=false,hotPursuitNeeded=false;
 bool Supported(const Package& p){return event_presentation_policy::Supported(p.authoring.value("combatMode",std::string("none")));}
 std::map<std::string,unsigned> typeKeys;
@@ -36,6 +40,7 @@ unsigned Icon(const Package* p,unsigned fallback){
  if(mode=="armsrace"){texture=combat_ui_asset::Texture;loaded=resource;}
  else if(mode=="gauntlet"){texture=gauntlet_ui_asset::Texture;loaded=gauntletResource;}
  else if(mode=="hotpursuit"){texture=hot_pursuit_ui_asset::Texture;loaded=hotPursuitResource;}
+ else if(mode=="drift"){texture=drift_ui_asset::Texture;loaded=driftResource;}
  if(!loaded)return fallback;
  return reinterpret_cast<void*(__cdecl*)(unsigned,int,int)>(0x503400)(texture,0,0)?texture:fallback;
 }
@@ -80,6 +85,9 @@ void Load(){
  LoadResource(armsNeeded,resource,combat_ui_asset::Digest,combat_ui_asset::Bytes,sizeof(combat_ui_asset::Bytes),combat_ui_asset::Texture,"armsrace");
  LoadResource(gauntletNeeded,gauntletResource,gauntlet_ui_asset::Digest,gauntlet_ui_asset::Bytes,sizeof(gauntlet_ui_asset::Bytes),gauntlet_ui_asset::Texture,"gauntlet");
  LoadResource(hotPursuitNeeded,hotPursuitResource,hot_pursuit_ui_asset::Digest,hot_pursuit_ui_asset::Bytes,sizeof(hot_pursuit_ui_asset::Bytes),hot_pursuit_ui_asset::Texture,"hotpursuit");
+ LoadResource(driftNeeded,driftResource,drift_ui_asset::Digest,drift_ui_asset::Bytes,sizeof(drift_ui_asset::Bytes),drift_ui_asset::Texture,"drift");
+ LoadResource(driftNeeded,driftHudResource,drift_hud_asset::Digest,drift_hud_asset::Bytes,sizeof(drift_hud_asset::Bytes),drift_hud_asset::Texture,"drift_hud");
+ LoadResource(driftNeeded,driftDigitResource,drift_digit_asset::Digest,drift_digit_asset::Bytes,sizeof(drift_digit_asset::Bytes),drift_digit_asset::Texture,"drift_digits");
 }
 bool Install(){
  for(const auto& p:packages)if(Supported(p)){
@@ -90,7 +98,8 @@ bool Install(){
   if(en.empty()||ja.empty())continue;
   if(combat=="gauntlet")gauntletNeeded=true;
   else if(combat=="hotpursuit")hotPursuitNeeded=true;
-  else armsNeeded=true;
+  else if(combat=="armsrace")armsNeeded=true;
+  else if(combat=="drift")driftNeeded=true;
   const unsigned key=Hash("MWEL_COMBAT_TYPE_"+type);
   if(!event_titles::titles.emplace(key,event_titles::Title{en,type,{},ja}).second)return false;
   typeKeys.emplace(type,key);needed=true;

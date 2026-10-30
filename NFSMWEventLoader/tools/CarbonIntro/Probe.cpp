@@ -154,7 +154,12 @@ void __fastcall NisPlay(void* self,void*){
  if(replace)for(unsigned i=0;i<scene.assets.participants;i++)if(!scene.FindVehicle(*reinterpret_cast<unsigned*>(r+0x18+i*0x194)))replace=false;
 #ifdef MWEL_CARBON_RUNTIME
  if(replace){auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float pose[4]{};replace=MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source));
-  if(replace){if(logging){char note[240];sprintf_s(note,"SCENE_PREFLIGHT_POSE origin=%.5f,%.5f,%.5f heading=%.5f",pose[0],pose[1],pose[2],pose[3]);Log(note);}scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();replace=scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
+  if(replace){if(logging){char note[240];sprintf_s(note,"SCENE_PREFLIGHT_POSE origin=%.5f,%.5f,%.5f heading=%.5f",pose[0],pose[1],pose[2],pose[3]);Log(note);}scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();
+   // Use the same pose policy as BeginStagedScene and SceneRuntime::Begin.
+   // Authored gates already supply the grid locator. The native-marker-only
+   // flat-grid check rejected a six-car field spanning a slope on first Play,
+   // while retry entered Begin directly and accepted the very same locator.
+   replace=MWELCarbonUsesAuthoredPose()||scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
  }
 #endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME

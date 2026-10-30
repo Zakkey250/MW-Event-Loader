@@ -9,6 +9,7 @@ unsigned MWELNeoCurrentKey();
 bool MWELNeoCourseEnabled();
 bool MWELNeoCourseFile(unsigned key,const char* suffix,char* output,unsigned size);
 bool MWELNeoSettingsFile(char* output,unsigned size);
+bool MWELDriftWallClearance(const float* position,const float* heading,float halfWidth,float halfLength,float* clearance);
 bool MWELNeoGate(unsigned key,unsigned leg,float* center,float* dimensions,float* rotation);
 void MWELNeoLog(const char* text);
 bool MWELNeoLoggingEnabled();

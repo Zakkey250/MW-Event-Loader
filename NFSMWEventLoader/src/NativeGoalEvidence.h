@@ -6,6 +6,28 @@ void(__thiscall* originalEnd)(void*);
 unsigned genuineGoals=0;
 bool forcedEstimationObserved=false;
 bool waitForField=false;
+bool retireObservedFinishers=false;
+struct ObservedFinisher {BYTE* vehicle=nullptr;BYTE* race=nullptr;unsigned handle=0;int mode=0;};
+ObservedFinisher observedFinishers[16]{};
+bool ObservedFinisherRetired(unsigned handle){for(const auto& car:observedFinishers)if(car.vehicle&&car.handle==handle)return true;return false;}
+bool FinisherModeGuard(BYTE* vehicle){
+ const BYTE getter[]={0x8B,0x81,0xAC,0,0,0,0xC3},deactivate[]={0x8B,0x01,0x6A,0,0xFF,0x50,0x34,0xC3};
+ auto vt=Read<unsigned*>(vehicle);
+ return vt==reinterpret_cast<unsigned*>(0x8AA828)&&vt[13]==0x688390&&vt[14]==0x688210&&vt[33]==0x6693C0&&
+  !memcmp(reinterpret_cast<void*>(0x688210),getter,sizeof(getter))&&!memcmp(reinterpret_cast<void*>(0x6693C0),deactivate,sizeof(deactivate));
+}
+void RestoreObservedFinishers(){
+ auto current=*reinterpret_cast<BYTE**>(0x91E000);
+ for(auto& car:observedFinishers){
+  if(car.vehicle&&car.race==current&&Read<unsigned>(car.vehicle-0x78)==car.handle&&FinisherModeGuard(car.vehicle)){
+   reinterpret_cast<void(__thiscall*)(void*,int)>(0x688390)(car.vehicle,car.mode);
+   const int mode=reinterpret_cast<int(__thiscall*)(void*)>(0x688210)(car.vehicle);
+   Log("EXPERIMENT_FINISHER_RESTORED handle=%u mode=%d expected=%d",car.handle,mode,car.mode);
+   if(mode!=car.mode){aborted=true;Log("EXPERIMENT_RACE_ABORT finisher_restore_unverified handle=%u",car.handle);}
+  }
+  car={};
+ }
+}
 void* deferredPlayer=nullptr;
 BYTE* deferredRace=nullptr;
 float deferredPlayerSeconds=0;
@@ -42,6 +64,41 @@ bool FieldComplete(BYTE* race){
  return (observed&mask)==mask;
 }
 bool FieldPending(){return waitForField&&deferredPlayer&&deferredRace==*reinterpret_cast<BYTE**>(0x91E000)&&OwnedRace(deferredRace)&&!FieldComplete(deferredRace);}
+bool FieldCoastPending(){
+ auto race=*reinterpret_cast<BYTE**>(0x91E000);
+ return waitForField&&race&&OwnedRace(race)&&!FieldComplete(race);
+}
+void RetireObservedFinishers(){
+ // Explicit V2 observer only. Native IVehicle::Deactivate calls
+ // SetPhysicsMode(None); verified EN1.3 slots13/14/33 and function bytes.
+ // Never kill/reposition a vehicle, alter native CPs, or retire an entrant
+ // before its physical native goal callback and score settlement.
+ if(!retireObservedFinishers||!waitForField||aborted)return;
+ auto race=*reinterpret_cast<BYTE**>(0x91E000);
+ if(!race||!OwnedRace(race))return;
+ if(FieldComplete(race)){RestoreObservedFinishers();return;}
+ const auto list=Read<BYTE**>(reinterpret_cast<void*>(0x92CD1C));
+ const auto count=Read<unsigned>(reinterpret_cast<void*>(0x92CD24));
+ if(!list||count>128){aborted=true;Log("EXPERIMENT_RACE_ABORT finisher_pool_invalid");return;}
+ for(unsigned slot=0;slot<16;++slot){
+  if(!(genuineGoals&(1u<<slot))||observedFinishers[slot].vehicle)continue;
+  const auto handle=motions[slot].handle;
+  if(!handle||Read<unsigned>(race,0x18+slot*0x194)!=handle)continue;
+  for(unsigned i=0;i<count;++i){auto vehicle=Read<BYTE*>(list,i*4);
+   if(!vehicle||Read<unsigned>(vehicle-0x78)!=handle)continue;
+   if(!FinisherModeGuard(vehicle)){aborted=true;Log("EXPERIMENT_RACE_ABORT finisher_native_guard handle=%u",handle);return;}
+   const int mode=reinterpret_cast<int(__thiscall*)(void*)>(0x688210)(vehicle);
+   if(mode!=1&&mode!=2){aborted=true;Log("EXPERIMENT_RACE_ABORT finisher_prior_mode handle=%u mode=%d",handle,mode);return;}
+   MWELNeoReleaseObservedGoal(handle);
+   observedFinishers[slot]={vehicle,race,handle,mode};
+   reinterpret_cast<void(__thiscall*)(void*)>(0x6693C0)(vehicle);
+   const int inactive=reinterpret_cast<int(__thiscall*)(void*)>(0x688210)(vehicle);
+   Log("EXPERIMENT_FINISHER_RETIRED slot=%u handle=%u native_goal=1 score_settled=1 mode_before=%d mode_after=%d native_CP_writes=0 authored_pose_writes=0 observer_only=1",slot,handle,mode,inactive);
+   if(inactive!=0){aborted=true;Log("EXPERIMENT_RACE_ABORT finisher_retirement_unverified handle=%u",handle);}
+   break;
+  }
+ }
+}
 void __fastcall DeactivateTrigger(void* self,void*){
  // Full-field lab hold must also preserve physical trigger registrations.
  // Native script cleanup can run outside Finish/EndRace and remove them as
@@ -119,6 +176,8 @@ void __cdecl Finish(void* actor){
    break;
   }
  }
+ if(slot>=0)MWELDriftFinish(unsigned(slot),verified);
+ if(waitForField&&verified&&FieldComplete(race))RestoreObservedFinishers();
  if(waitForField&&verified&&!FieldComplete(race)&&actor){
   auto table=Read<void**>(actor);
   if(table&&reinterpret_cast<bool(__thiscall*)(void*)>(table[9])(actor)){
@@ -144,7 +203,17 @@ void __cdecl Finish(void* actor){
   auto mode=mwel::Read(productionMarker,128);
   if(mode=="MW_EVENT_LOADER_PRODUCTION_FINISH_V1\n"||mode=="MW_EVENT_LOADER_NULL_PLAYER_FINISH_V1\n"){
    Log("EXPERIMENT_PRODUCTION_FINISH_DELEGATE slot=%d player=%u physical_goal=%u null_player=%u",slot,unsigned(player),unsigned(verified),unsigned(player&&mode=="MW_EVENT_LOADER_NULL_PLAYER_FINISH_V1\n"));
-   MWELLabProductionFinish(player&&mode=="MW_EVENT_LOADER_NULL_PLAYER_FINISH_V1\n"?nullptr:actor,originalFinish);return;
+   MWELLabProductionFinish(player&&mode=="MW_EVENT_LOADER_NULL_PLAYER_FINISH_V1\n"?nullptr:actor,originalFinish);
+   if(player&&verified){
+    // This explicit lab fixture enabled native player autopilot. Release it
+    // at the real goal so postrace controls can be exercised normally.
+    // Game_ForceAIControl(false) does not release input; Game_ClearAIControl
+    // is the same verified boundary used by completed-transition fixtures.
+    const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
+    if(memcmp(reinterpret_cast<void*>(0x612420),guard,sizeof(guard))){aborted=true;Log("EXPERIMENT_RACE_ABORT native_player_clear_controller_guard");return;}
+    reinterpret_cast<void(__cdecl*)(unsigned)>(0x612420)(0);
+    Log("EXPERIMENT_PRODUCTION_PLAYER_INPUT_RESTORED genuine_goal=1 native_finish_unmodified=1");
+   }return;
   }
  }
  MWELHotPursuitFinish(actor,verified,player,slot,originalFinish);

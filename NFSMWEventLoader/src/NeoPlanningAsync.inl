@@ -1,12 +1,12 @@
 // Included after planner helpers. Native state is captured only by SubmitPlan.
 struct NeoPlanInput {
  mwel_async_geometry::Snapshot geometry;
- std::vector<YellowRecoveryPoint> road;
+ std::vector<YellowRecoveryPoint> road;std::vector<mwel_drift_line::Bend> driftBends;
  std::vector<std::pair<Vec3,Vec3>> barriers;
  std::vector<YellowTrafficPoint> traffic;
  mwneo::Vehicle vehicle;mwneo::Profile profile;
  YellowRacingLine previous;YellowGatePassage passage;
- float station=0;unsigned slot=0;bool diagnosticTiming=false;
+ float station=0;unsigned slot=0;bool diagnosticTiming=false,drift=false;
 };
 #include "NeoPlanShift.h"
 struct NeoPlanOutput {
@@ -39,12 +39,12 @@ static std::optional<NeoPlanOutput> ComputePlan(NeoPlanInput& input,const mwel_a
   preferred=NeoPreferredLane(input.slot,mwneo::CrossXZ(tangent,{p[0]-origin.x,p[1]-origin.y,p[2]-origin.z}));
  }
  auto traffic=input.traffic.data();unsigned count=unsigned(input.traffic.size());
- if(YellowOptimizeLine(local,out.grounded,input.station,p,h,v.speed,v.halfWidth,preferred,&input.previous,out.line,traffic,count,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,input.profile),0.f,true,false,&input.passage)){
+ if(input.drift?NeoBuildDriftLine(local,out.grounded,input.driftBends,input.station,v,out.line,input.passage):YellowOptimizeLine(local,out.grounded,input.station,p,h,v.speed,v.halfWidth,preferred,&input.previous,out.line,traffic,count,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,input.profile),0.f,true,false,&input.passage)){
   out.optimized=true;auto checked=out.line;
   if(cancel.Requested())return {};
-  NeoSmoothLine(local,out.line,v.halfWidth,traffic,count,true,v.speed,h,NeoInitialCurveLimit(v,input.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
+  if(!input.drift)NeoSmoothLine(local,out.line,v.halfWidth,traffic,count,true,v.speed,h,NeoInitialCurveLimit(v,input.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
   if(cancel.Requested())return {};
-  out.curveFit=NeoCurveLine(local,out.line,v.halfWidth,traffic,count,true,v.speed,h,NeoInitialCurveLimit(v,input.profile));
+  if(!input.drift)out.curveFit=NeoCurveLine(local,out.line,v.halfWidth,traffic,count,true,v.speed,h,NeoInitialCurveLimit(v,input.profile));
   out.line.passage=input.passage;if(!YellowGateLineClear(out.line))out.line=std::move(checked);
  }
  if(cancel.Requested()||!world.Complete())return {};
@@ -75,6 +75,7 @@ static void DiscardPlan(unsigned slot,NeoProviderState& state){if(planWorker)pla
 static bool SubmitPlan(unsigned slot,NeoProviderState& state,const mwneo::Vehicle& v,const std::vector<YellowRecoveryPoint>& road,float station,const YellowTrafficPoint* traffic,unsigned count,ULONGLONG now){
  if(!EnsurePlanWorker()||road.size()<2)return false;
  NeoPlanInput input;input.vehicle=v;input.profile=neoSettings.profile;input.road=road;input.previous=state.line;input.passage=state.passage;input.station=station;input.slot=slot;input.diagnosticTiming=MWELNeoLoggingEnabled();
+ input.drift=MWELNeoDriftMode()!=0;if(input.drift)input.driftBends=state.driftBends;
  input.barriers=nearbyWalls;input.traffic.assign(traffic,traffic+count);
  Vec3 low{v.position.x,v.position.y,v.position.z},high=low;
  auto expand=[&](Vec3 p){low={std::min(low.x,p.x),std::min(low.y,p.y),std::min(low.z,p.z)};high={std::max(high.x,p.x),std::max(high.y,p.y),std::max(high.z,p.z)};};

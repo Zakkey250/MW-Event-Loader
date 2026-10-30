@@ -25,6 +25,13 @@ using Json=nlohmann::json;
 // Optional editor switches are opt-in, even in older verified packages.
 inline bool Feature(const Json& event,const char* name){auto v=event.find(name);return v!=event.end()&&v->is_boolean()&&v->get<bool>();}
 inline bool NeoEnabled(const Json& event){auto v=event.find("aiRouteMode");return v!=event.end()&&v->is_string()&&*v=="yellow";}
+// Drift owns a police-free race, even when an imported package retains old
+// police or starting-heat values. Normalize the in-memory copy only.
+inline void ApplyFixedRaceRules(Json& event){
+ if(event.value("combatMode",std::string("none"))=="drift"){
+  event["cops"]=false;event["copDensity"]=0;event["startHeatLevel"]=nullptr;
+ }
+}
 // Only circuit and knockout modes own laps. A copied authoring value must
 // never turn a sprint-derived speed-trap race into a multi-lap HUD/distance.
 inline unsigned RaceLaps(const Json& event){const auto mode=event.at("mode").get<std::string>();return mode=="circuit"||mode=="lapknockout"?event.at("laps").get<unsigned>():1u;}
@@ -147,7 +154,8 @@ inline EventPackage ParsePackage(const fs::path& directory){
  }
  if(traps>16)throw std::runtime_error("Speed trap limit");
  if(mode=="speedtraprace"&&!traps)throw std::runtime_error("Speed trap points required");
- if(starts!=1||finishes!=1)throw std::runtime_error("Start/finish counts");return result;
+ if(starts!=1||finishes!=1)throw std::runtime_error("Start/finish counts");
+ ApplyFixedRaceRules(result.authoring);return result;
 }
 inline void AtomicWrite(const fs::path& destination,const std::string& bytes){
  fs::create_directories(destination.parent_path());

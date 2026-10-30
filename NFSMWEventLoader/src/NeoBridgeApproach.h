@@ -11,7 +11,7 @@ static bool NeoBridgeApproach(const CollisionWorld& world,const std::vector<Yell
  float alignment=mwneo::DotXZ(tangent,mwneo::UnitXZ(car.heading));if(alignment<.7f)return false;
  float lateral=mwneo::CrossXZ(tangent,{car.position.x-center.x,0,car.position.z-center.z});if(std::abs(lateral)>10)return false;
  float derivative=mwneo::CrossXZ(tangent,mwneo::UnitXZ(car.heading))/alignment;
- const float blend=std::clamp(std::abs(car.speed)*.6f,24.f,48.f),width=std::clamp(car.halfWidth,.8f,1.5f)+.35f;
+ const float blend=std::clamp(std::abs(car.speed)*.6f,24.f,48.f),width=std::clamp(car.halfWidth,.8f,3.5f)+.35f;
  Vec3 previous{car.position.x,car.position.y,car.position.z};RayHit floor;
  if(!world.Ray({previous.x,previous.y+1,previous.z},{previous.x,previous.y-3,previous.z},floor,true))return false;
  float clearance=std::clamp(previous.y-floor.point.y,.15f,1.f);auto before=mwneo::UnitXZ(car.heading);

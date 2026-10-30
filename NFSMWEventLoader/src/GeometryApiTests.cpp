@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <cassert>
 #include <stdexcept>
+#include "../../integration/NativeFloatMath.h"
 #include "../../World2MW/src/NativeLoader/CollisionWorld.h"
 using namespace w2mw;
 static CollisionWorld collision;

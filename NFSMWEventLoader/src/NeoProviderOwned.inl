@@ -19,6 +19,7 @@
 #include "NeoBranchRecovery.h"
 #include "NeoLaneProgress.h"
 #include "NeoRecoveryObservation.h"
+#include "DriftLinePolicy.h"
 using NeoAuthoredObstacle=event_neo_obstacles::Obstacle;
 struct NeoCourse {unsigned hash=0;std::vector<mwneo::Graph> legs;std::vector<NeoAuthoredObstacle> obstacles;};
 static NeoCourse neoCourse;
@@ -29,6 +30,7 @@ struct NeoProviderState {
  mwel_grid::Launch launch{};bool launchConsidered=false;ULONGLONG approachRetryAt=0;std::vector<YellowRecoveryPoint> launchSurface;
  unsigned key=0,hash=0,lap=~0u;void* race=nullptr;int leg=-1;float station=0;unsigned seed=0,routeRevision=0;
  std::map<int,NeoRoad> roads;std::vector<YellowRecoveryPoint> through,grounded;YellowRacingLine line;ULONGLONG planned=0,logged=0,snapshotAt=0,asyncRequestedAt=0;float buildMs=0;
+ std::vector<YellowRecoveryPoint> driftShape;std::vector<mwel_drift_line::Bend> driftBends,driftWholeBends;std::vector<float> driftOrigins;unsigned driftRevision=~0u;int driftLeg=-1;ULONGLONG driftLineLogged=0;
  ULONGLONG lineAcceptedAt=0;
  double queryTotal=0,queryMax=0;unsigned queryCount=0;
  NeoManeuverCache reverseCache{},forwardCache{};
@@ -52,6 +54,7 @@ struct NeoProviderState {
 static NeoProviderState neoProviders[16];
 static const std::vector<std::pair<Vec3,Vec3>>& YellowBarrierSnapshot();
 #include "../../World2MW/src/NativeLoader/NeoLinePlanner.h"
+#include "NeoDriftLine.h"
 #include "NeoAirborneRoad.h"
 #include "NeoNativeGravity.h"
 #include "NeoResetObservation.h"
@@ -152,6 +155,31 @@ static const NeoRoad& NeoCommittedRoad(NeoProviderState& state,int leg,bool repo
  Log("MW_NEOAI_COMMITTED_ROAD key=%u CP=%d points=%u length_m=%.3f directed_branch_selection=1",state.key,leg,unsigned(road.points.size()),road.points.empty()?0.f:road.points.back().station);
  return commit();
 }
+static void NeoPrepareDriftShape(NeoProviderState& state,int leg){
+ if(!MWELNeoDriftMode())return;
+ if(state.driftRevision!=state.routeRevision||state.driftOrigins.size()!=neoCourse.legs.size()){
+  std::vector<YellowRecoveryPoint> shape;state.driftOrigins.clear();
+  for(unsigned l=0;l<neoCourse.legs.size();++l){
+   const auto& points=NeoCommittedRoad(state,int(l)).points;if(points.empty())return;
+   float base=shape.empty()?0.f:shape.back().station+mwneo::Distance({shape.back().p[0],shape.back().p[1],shape.back().p[2]},{points.front().p[0],points.front().p[1],points.front().p[2]});
+   base-=points.front().station;state.driftOrigins.push_back(base);
+   for(auto p:points){p.station+=base;if(!shape.empty()&&p.station<=shape.back().station+.001f)continue;shape.push_back(p);}
+  }
+  state.driftWholeBends=mwel_drift_line::Bends(shape,MWELNeoDriftMode()==2);state.driftShape=std::move(shape);state.driftRevision=state.routeRevision;state.driftLeg=-1;
+  Log("DRIFT_LINE_COURSE handle=%u legs=%u bends=%u CP_independent=1",state.key,unsigned(state.driftOrigins.size()),unsigned(state.driftWholeBends.size()));
+  if(MWELNeoDetailedLoggingEnabled()){
+   for(const auto& b:state.driftWholeBends)Log("DRIFT_LINE_BEND handle=%u begin=%.6f apex=%.6f end=%.6f side=%d turn=%.6f linked=%u",state.key,b.begin,b.apex,b.end,b.side,b.turn,unsigned(b.linked));
+   // Once per route revision. These are diagnostic geometry observations,
+   // never a second live reference or a per-frame export. OFF skips the loops.
+   for(unsigned i=0;i<state.driftOrigins.size();++i)Log("DRIFT_LINE_ORIGIN handle=%u CP=%u station=%.6f",state.key,i,state.driftOrigins[i]);
+   for(unsigned i=0;i<state.driftShape.size();++i){const auto& q=state.driftShape[i];Log("DRIFT_LINE_POINT handle=%u index=%u station=%.6f position=%.6f,%.6f,%.6f",state.key,i,q.station,q.p[0],q.p[1],q.p[2]);}
+  }
+ }
+ if(state.driftLeg!=leg&&leg>=0&&unsigned(leg)<state.driftOrigins.size()){
+  state.driftBends=state.driftWholeBends;const auto origin=state.driftOrigins[leg];
+  for(auto& b:state.driftBends){b.begin-=origin;b.end-=origin;b.apex-=origin;}state.driftLeg=leg;
+ }
+}
 #include "NeoPlanningAsync.inl"
 static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  if(!neoSettings.enabled||neoSettings.controller!=2||editorStock||!EventGeometryAvailable()||!mwneo::Finite(v.position)||!mwneo::Finite(v.heading))return 0;
@@ -192,7 +220,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
 #endif
   Log("MW_NEOAI_FLIGHT_MODEL handle=%u CP=%d lap=%u read=%u contacts=%d collision=%u accepted=%u samples=%u known=%u accel_low=%.6f accel_high=%.6f raw_gravity=%.6f mass=%.3f body_pointer=%u physics_mode=%d vehicle_pointer=%u watch_reference=%u watch_bounds=%u watch_epoch=%u watch_handle=%u watch_body=%u watch_reference_time=%u watch_reference_velocity=%u position_pointer=%u position_getter=%u position_match=%.6f half_height=%.6f pitch=%.6f driver_acceleration=%.6f throttle=%.6f brake=%.6f steering=%.6f power_scale=%.6f motion_known=%u recovery=%u departure_accepted=%u departure_samples=%u nos_allowed=%u nos_read=%u nos_equipped=%u nos_requested=%u nos_engaged=%u nos_tank=%.6f velocity=%.6f,%.6f,%.6f position=%.6f,%.6f,%.6f native_seconds=%.6f",v.handle,leg,lap,unsigned(dynamicsRead),dynamics.contacts,dynamics.collisionFlags,unsigned(flightSample),flight.model.count,unsigned(flightKnown),flightLow,flightHigh,dynamics.gravity,dynamics.mass,dynamics.body,dynamics.physicsMode,unsigned(flightVehicle),unsigned(flight.model.previous.p),unsigned(&flight.positionWatch),unsigned(&flight.race),unsigned(&flight.handle),unsigned(&flight.body),unsigned(&flight.model.previous.time),unsigned(flight.model.previous.v),dynamics.positionPointer,dynamics.positionGetter,std::hypot(std::hypot(v.position.x-dynamics.position[0],v.position.z-dynamics.position[2]),v.position.y-dynamics.position[1]),dynamics.halfHeight,observation.pitch,driveMotion.acceleration,driveMotion.throttle,driveMotion.brake,driveMotion.steering,driveMotion.powerScale,unsigned(driveMotion.known),unsigned(v.recovery),unsigned(departureSample),flight.departure.count,unsigned(driveMotion.nosAllowed),unsigned(driveMotion.nosRead),unsigned(driveMotion.nosEquipped),unsigned(driveMotion.nosRequested),unsigned(driveMotion.nosEngaged),driveMotion.nosTank,v.velocity.x,v.velocity.y,v.velocity.z,v.position.x,v.position.y,v.position.z,observation.time);
  }
- if(state.leg!=leg){DiscardPlan(slot,state);state.leg=leg;state.launchConsidered=false;state.launch={};state.launchSurface.clear();state.verifiedPlacementAt=0;state.lastGuidanceStatus=0;state.ForgetSupport();state.respawnHistory={};state.recoveryAnchor={};state.staticBranchFailures.clear();state.station=0;state.line={};state.through.clear();state.grounded.clear();state.planned=0;state.reverseCache={};state.forwardCache={};state.escape={};state.observedAt=0;for(auto it=state.roads.begin();it!=state.roads.end();)if(it->first<leg-1||it->first>leg+1)it=state.roads.erase(it);else ++it;}
+ if(state.leg!=leg){DiscardPlan(slot,state);state.leg=leg;state.launchConsidered=false;state.launch={};state.launchSurface.clear();state.verifiedPlacementAt=0;state.lastGuidanceStatus=0;state.ForgetSupport();state.respawnHistory={};state.recoveryAnchor={};state.staticBranchFailures.clear();state.station=0;state.line={};state.through.clear();state.grounded.clear();state.planned=0;state.reverseCache={};state.forwardCache={};state.escape={};state.observedAt=0;if(!MWELNeoDriftMode()){for(auto it=state.roads.begin();it!=state.roads.end();)if(it->first<leg-1||it->first>leg+1)it=state.roads.erase(it);else ++it;}}
  ULONGLONG now=GetTickCount64();
  // A committed shortcut can be geometrically valid yet blocked by fixed
  // construction scenery. After a real stationary blockage, abandon only the
@@ -208,7 +236,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
    float expected=bodyFloor.point.y-(bodyFloor.normal.x*(point.x-body.x)+bodyFloor.normal.z*(point.z-body.z))/bodyFloor.normal.y;
    RayHit floor;if(!collision.Ray({point.x,expected+1,point.z},{point.x,expected-2,point.z},floor,true)||std::abs(floor.point.y-expected)>1.5f)return false;
    float clearance=std::clamp(body.y-bodyFloor.point.y,.15f,1.f);Vec3 target{point.x,floor.point.y+clearance,point.z};
-   return YellowGateEdgeClear(state.passage,body,target)&&YellowLineSupported(collision,body,target,std::clamp(v.halfWidth,.8f,1.5f)+.35f,clearance);
+   return YellowGateEdgeClear(state.passage,body,target)&&YellowLineSupported(collision,body,target,std::clamp(v.halfWidth,.8f,3.5f)+.35f,clearance);
   });
   if(rejoin.valid){
    if(state.blockedStaticBranch&&neoRejectedBranches.insert({leg,state.blockedStaticBranch}).second)
@@ -219,6 +247,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
   }else Log("MW_NEOAI_BRANCH_FALLBACK_DEFERRED key=%u CP=%d old_branch_retained=1 main_join_not_physically_reachable=1",v.handle,leg);
  }
  const auto& committed=NeoCommittedRoad(state,leg);const auto& road=committed.points;if(road.size()<2)return 0;
+ NeoPrepareDriftShape(state,leg);
  const float observedElapsed=state.observedAt&&now>=state.observedAt?float(now-state.observedAt)*.001f:0;
  const float observedMoved=state.observedAt?mwneo::Distance(v.position,state.observedPosition):0;
  if(state.observedAt&&now-state.observedAt<500){
@@ -255,7 +284,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
     unsigned chordFailure=0;bool chordClear=false;
     if(MWELNeoDetailedLoggingEnabled()&&!state.launchSurface.empty()){
      RayHit floor;if(collision.Ray({v.position.x,v.position.y+1,v.position.z},{v.position.x,v.position.y-3,v.position.z},floor,true)){
-      const auto& target=state.launchSurface.back();chordClear=YellowLineSupported(collision,{v.position.x,v.position.y,v.position.z},{target.p[0],target.p[1],target.p[2]},std::clamp(v.halfWidth,.8f,1.5f)+.35f,std::clamp(v.position.y-floor.point.y,.15f,1.f),true,&chordFailure);
+      const auto& target=state.launchSurface.back();chordClear=YellowLineSupported(collision,{v.position.x,v.position.y,v.position.z},{target.p[0],target.p[1],target.p[2]},std::clamp(v.halfWidth,.8f,3.5f)+.35f,std::clamp(v.position.y-floor.point.y,.15f,1.f),true,&chordFailure);
      }
     }
     Log("EVENT_NEOAI_LAP_SURFACE_APPROACH handle=%u lap=%u accepted=%u failure=%u samples=%u legacy_chord_clear=%u legacy_chord_failure=%u reference_obstructions=%u reference_only=1 live_lane_arc_wall_checks_retained=1 native_CP_writes=0",v.handle,lap,unsigned(initialized),failure,unsigned(state.launchSurface.size()),unsigned(chordClear),chordFailure,referenceObstructions);
@@ -388,10 +417,11 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
    auto tangent=mwneo::UnitXZ({laneAhead.x-laneOrigin.x,laneAhead.y-laneOrigin.y,laneAhead.z-laneOrigin.z});
    preferred=NeoPreferredLane(slot,mwneo::CrossXZ(tangent,{p[0]-laneOrigin.x,p[1]-laneOrigin.y,p[2]-laneOrigin.z}));
   }
-  if(YellowOptimizeLine(collision,trajectory,geometricStation,p,h,v.speed,v.halfWidth,preferred,&state.line,planned,traffic,trafficCount,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,neoSettings.profile),0.f,true,false,&state.passage)){
+  const bool driftPlan=MWELNeoDriftMode()!=0;
+  if(driftPlan?NeoBuildDriftLine(collision,trajectory,state.driftBends,geometricStation,v,planned,state.passage):YellowOptimizeLine(collision,trajectory,geometricStation,p,h,v.speed,v.halfWidth,preferred,&state.line,planned,traffic,trafficCount,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,neoSettings.profile),0.f,true,false,&state.passage)){
    auto checkedPlan=planned;
-   NeoSmoothLine(collision,planned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
-   if(NeoCurveLine(collision,planned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile)))++state.curveFits;else ++state.curveRejects;
+   if(!driftPlan){NeoSmoothLine(collision,planned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
+   if(NeoCurveLine(collision,planned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile)))++state.curveFits;else ++state.curveRejects;}
    planned.passage=state.passage;if(!YellowGateLineClear(planned))planned=std::move(checkedPlan);
    state.line=std::move(planned);state.lineAcceptedAt=now;
   }
@@ -411,8 +441,42 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  for(const auto* candidate:{&state.line,&referenceLine}){
   float cursor=geometricStation;
   if(candidate->points.size()<2||!NeoProjectLine(*candidate,{p[0],p[1],p[2]},geometricStation,cursor)||cursor+6>candidate->points.back().station)continue;
-  float look=std::min(mwneo::SteeringHorizon(v.speed,neoSettings.profile),candidate->points.back().station-cursor);
-  const float wanted=mwneo::SteeringHorizon(v.speed,neoSettings.profile);
+  const unsigned driftMode=MWELNeoDriftMode();
+  const float wanted=driftMode?mwel_drift_line::SteeringLook(v.speed,driftMode==2):mwneo::SteeringHorizon(v.speed,neoSettings.profile);
+  float look=std::min(wanted,candidate->points.back().station-cursor);
+  // Native yaw-request control has a different limit from the grip driver's
+  // wheel-lock geometry. A close return target can be clear but unexecutable
+  // at this speed, causing the actuator to brake for its own correction arc.
+  // Try a longer REAL point on the same line before accepting that slowdown.
+  // Every alternative receives the identical body/ground/gate/traffic sweep;
+  // ordinary/Arcade paths and the original short-look fallback are unchanged.
+  Vec3 nearby{};
+  if(driftMode==2&&YellowLineSample(candidate->points,cursor+look,nearby)&&
+     std::abs(mwel_drift_line::NativeAimRate(v,{nearby.x,nearby.y,nearby.z}))>mcd::NativeDriftTurnLimit){
+   const float maximum=std::min(candidate->points.back().station-cursor,std::clamp(v.speed*1.2f,24.f,40.f));
+   for(float extended=look+4;extended<=maximum+.001f;extended+=4){
+    Vec3 target{};
+    if(!YellowLineSample(candidate->points,cursor+extended,target)||
+       !NeoArcFeasible(v,neoSettings.profile,{target.x,target.y,target.z}))continue;
+    const float rate=mwel_drift_line::NativeAimRate(v,{target.x,target.y,target.z});
+    if(!std::isfinite(rate)||std::abs(rate)>mcd::NativeDriftTurnLimit)continue;
+    YellowArcDiagnostic failure;++arcAttempts;
+    if(!YellowLineArc(collision,*candidate,cursor,p,h,target,v.halfWidth,nullptr,0,v.speed,
+       std::clamp(std::abs(v.speed)*.75f,10.f,55.f),&failure,candidate==&state.line?3.5f:NeoRouteTolerance,
+       v.halfLength,NeoExecutionCornerReserve(v),true)){
+     lastFailure=failure;failureMask|=1u<<failure.reason;
+     if(failure.reason==4){originUnsupported=true;return;}continue;
+    }
+    const float risk=YellowArcTrafficCost(p,h,target,v.speed,v.halfWidth,traffic,trafficCount);
+    if(risk>=1e29f){failureMask|=1u<<9;continue;}
+    const float score=NeoArcPreference(extended,wanted,candidate==&state.line,risk,12.f)+
+      state.executionPreference.Penalty({target.x-p[0],0,target.z-p[2]},now,geometricStation);
+    if(score<selectedScore){clear=true;selectedLine=candidate;selectedCursor=cursor;selectedPlan=candidate==&state.line;
+     selectedTrafficCost=risk;selectedScore=score;selectedLook=extended;g.aim={target.x,target.y,target.z};}
+    if(risk==0){aim={g.aim.x,g.aim.y,g.aim.z};return;}
+    break;
+   }
+  }
   for(;;){
    // Steering is recomputed every physics tick. Validate the upcoming
    // execution, not a fixed circle all the way to a distant preview point.
@@ -458,10 +522,11 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
    auto tangent=mwneo::UnitXZ({ahead.x-origin.x,ahead.y-origin.y,ahead.z-origin.z});preferred=NeoPreferredLane(slot,mwneo::CrossXZ(tangent,{p[0]-origin.x,p[1]-origin.y,p[2]-origin.z}));
   }
   YellowRacingLine replanned;
-  if(YellowOptimizeLine(collision,trajectory,geometricStation,p,h,v.speed,v.halfWidth,preferred,&state.line,replanned,traffic,trafficCount,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,neoSettings.profile),0.f,true,false,&state.passage)){
+  const bool driftPlan=MWELNeoDriftMode()!=0;
+  if(driftPlan?NeoBuildDriftLine(collision,trajectory,state.driftBends,geometricStation,v,replanned,state.passage):YellowOptimizeLine(collision,trajectory,geometricStation,p,h,v.speed,v.halfWidth,preferred,&state.line,replanned,traffic,trafficCount,true,v.speed,true,NeoLaneExtent,NeoInitialCurveLimit(v,neoSettings.profile),0.f,true,false,&state.passage)){
    auto checkedPlan=replanned;
-   NeoSmoothLine(collision,replanned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
-   if(NeoCurveLine(collision,replanned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile)))++state.curveFits;else ++state.curveRejects;
+   if(!driftPlan){NeoSmoothLine(collision,replanned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile),std::clamp(std::abs(v.speed)*.012f,.2f,.8f),true);
+   if(NeoCurveLine(collision,replanned,v.halfWidth,traffic,trafficCount,true,v.speed,h,NeoInitialCurveLimit(v,neoSettings.profile)))++state.curveFits;else ++state.curveRejects;}
    replanned.passage=state.passage;if(!YellowGateLineClear(replanned))replanned=std::move(checkedPlan);
    state.line=std::move(replanned);state.lineAcceptedAt=now;selectArc();
   }
@@ -525,7 +590,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
   if((transientSupportGap||supportedFlight)&&closeProjection&&std::abs(v.speed)>15&&state.lastClearAt&&(now-state.lastClearAt<=750||supportedFlight)){
   Vec3 referenceAim{};float look=std::clamp(mwneo::SteeringHorizon(v.speed,neoSettings.profile),12.f,32.f);
   if(YellowLineSample(trajectory,std::min(trajectory.back().station,geometricStation+look),referenceAim)){
-   const Vec3 origin{p[0],p[1],p[2]},airAhead{referenceAim.x,p[1],referenceAim.z};float width=std::clamp(v.halfWidth,.8f,1.5f)+.35f;
+   const Vec3 origin{p[0],p[1],p[2]},airAhead{referenceAim.x,p[1],referenceAim.z};float width=std::clamp(v.halfWidth,.8f,3.5f)+.35f;
    if(!supportedFlight||(YellowWallCorridor(collision,origin,airAhead,width)&&YellowEditorWallCorridor(origin,airAhead,width))){
     selectedLine=&referenceLine;selectedCursor=geometricStation;aim=referenceAim;unsupportedCruise=true;
    }
@@ -630,7 +695,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  if(clear){
   float distance=std::clamp(std::abs(v.speed)*.2f,4.f,12.f);
   Vec3 origin{p[0],p[1],p[2]},ahead{p[0]+h[0]*distance,p[1],p[2]+h[2]*distance};
-  float width=std::clamp(v.halfWidth,.8f,1.5f)+.35f;
+  float width=std::clamp(v.halfWidth,.8f,3.5f)+.35f;
   if(!YellowWallCorridor(collision,origin,ahead,width)&&YellowWallCorridor(collision,origin,ahead,width,true))g.predictiveAvoidance|=2;
  }
  // Moving-car passing retains its contact-racing policy. A fixed authored
@@ -662,7 +727,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  // Reserve rear body length and braking clearance in the driver's target.
  for(float distance:{8.f,6.f,4.f,3.f}){
   Vec3 rear{p[0]-h[0]*distance,p[1],p[2]-h[2]*distance};
-  if(YellowLineSupported(collision,{p[0],p[1],p[2]},rear,std::clamp(v.halfWidth,.8f,1.5f)+.35f,.5f,true)){g.rearDistance=distance;break;}
+  if(YellowLineSupported(collision,{p[0],p[1],p[2]},rear,std::clamp(v.halfWidth,.8f,3.5f)+.35f,.5f,true)){g.rearDistance=distance;break;}
  }
  // Traffic contact is allowed during backoff too. Only static walls and
  // missing road support veto reversing; nearby racers cannot freeze a jam.
