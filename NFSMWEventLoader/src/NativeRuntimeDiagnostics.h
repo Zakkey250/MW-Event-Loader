@@ -1,6 +1,8 @@
 #pragma once
 // Read-only, opt-in diagnosis. Preserve the native assertion dialog and its
 // Abort/Retry/Ignore behaviour; never turn a failed heap check into success.
+// RoadPlace also hosts the RPD placement guard. Its functional installation
+// is independent of logging; all diagnostic work remains behind the ON gate.
 namespace native_runtime_diagnostics {
 // Diagnosis must not provoke an access violation just to discover an
 // uninitialized HUD slot. Validate every page before the existing guarded copy.
@@ -20,6 +22,84 @@ bool Snapshot(const void* from,void* to,size_t count){
  return Copy(from,to,count);
 }
 void* reportTrampoline=nullptr;
+void Controls(const char* boundary){
+ if(!worldLogEnabled)return;
+ // UIGetControlText (00628230) reads 52-byte action records here: action ID
+ // followed by keyboard primary/secondary and pad primary/secondary triples.
+ // Read the actual pad bindings too; PlayerSettings alone cannot prove them.
+ unsigned mappings[19][13]{};
+ if(Snapshot(reinterpret_cast<void*>(0x91F418),mappings,sizeof(mappings))){
+  unsigned fingerprint=2166136261u;for(const auto& row:mappings)for(unsigned n=7;n<13;++n)fingerprint=(fingerprint^row[n])*16777619u;
+  Log("NATIVE_PAD_BINDINGS boundary=%s fingerprint=%08X records=19 read_only=1",boundary,fingerprint);
+  for(unsigned i=0;i<19;++i){const auto& row=mappings[i];Log("NATIVE_PAD_BINDING boundary=%s index=%u action=%08X primary=%08X,%08X,%08X secondary=%08X,%08X,%08X",boundary,i,row[0],row[7],row[8],row[9],row[10],row[11],row[12]);}
+ }
+ unsigned list=0,count=0;Snapshot(reinterpret_cast<void*>(0x92D87C),&list,4);Snapshot(reinterpret_cast<void*>(0x92D884),&count,4);
+ if(!list||count>4)return;
+ for(unsigned i=0;i<count;++i){unsigned player=0,table=0,methods[14]{};
+  if(!Snapshot(reinterpret_cast<void*>(list+i*4),&player,4)||!Snapshot(reinterpret_cast<void*>(player),&table,4)||!Snapshot(reinterpret_cast<void*>(table),methods,sizeof(methods)))continue;
+  if(methods[5]<0x401000||methods[5]>=0x889000||methods[7]<0x401000||methods[7]>=0x889000||methods[13]<0x401000||methods[13]>=0x889000)continue;
+  const auto settings=reinterpret_cast<unsigned(__thiscall*)(unsigned)>(methods[5])(player);
+  const auto index=reinterpret_cast<unsigned(__thiscall*)(unsigned)>(methods[7])(player);
+  const auto port=reinterpret_cast<unsigned(__thiscall*)(unsigned)>(methods[13])(player);
+  unsigned words[5]{};if(!Snapshot(reinterpret_cast<void*>(settings),words,sizeof(words)))continue;
+  Log("NATIVE_CONTROL_SETTINGS boundary=%s player=%08X settings=%08X index=%u port=%u words=%08X,%08X,%08X,%08X,%08X read_only=1",boundary,player,settings,index,port,words[0],words[1],words[2],words[3],words[4]);
+ }
+}
+bool(__thiscall* originalVehiclePlace)(unsigned,const void*,const void*)=nullptr;
+bool(__thiscall* originalRoadPlace)(unsigned,unsigned,unsigned,unsigned)=nullptr;
+bool __fastcall RoadPlace(unsigned ai,void*,unsigned segment,unsigned distance,unsigned direction){
+ if(!MWELRpdNativePlacementAllowed(reinterpret_cast<void*>(ai)))return true;
+ if(worldLogEnabled){
+  static unsigned reports=0;static std::set<unsigned> callers;const auto caller=unsigned(_ReturnAddress());
+  unsigned table=0,vehicle=0,handle=0;
+  if(Snapshot(reinterpret_cast<void*>(ai),&table,4)&&table==0x892480&&
+     Snapshot(reinterpret_cast<void*>(ai-4),&vehicle,4)&&vehicle&&Snapshot(reinterpret_cast<void*>(vehicle-0x80+8),&handle,4)&&
+     (reports<12||callers.insert(caller).second)){
+   ++reports;Log("NATIVE_COP_ROAD_PLACEMENT handle=%u caller=%08X segment=%08X distance=%08X direction=%08X observer_only=1",handle,caller,segment,distance,direction);
+  }
+ }
+ return originalRoadPlace(ai,segment,distance,direction);
+}
+bool InstallRoadPlacementGuard(){
+ if(originalRoadPlace)return true;
+ const BYTE guard[]={0x53,0x56,0x8B,0xF1,0x8B,0x06,0x57,0xFF,0x50,0x48};
+ auto site=reinterpret_cast<void*>(0x4226E0);
+ if(memcmp(site,guard,sizeof(guard))||MH_CreateHook(site,RoadPlace,reinterpret_cast<void**>(&originalRoadPlace))!=MH_OK)return false;
+ if(MH_EnableHook(site)==MH_OK)return true;
+ MH_RemoveHook(site);originalRoadPlace=nullptr;return false;
+}
+bool __fastcall VehiclePlace(unsigned self,void*,const void* position,const void* direction){
+ if(!MWELRpdVehiclePlacementAllowed(reinterpret_cast<void*>(self)))return true;
+ unsigned driver=~0u,table=0,handle=0;float requested[3]{},before[3]{},after[3]{};
+ static unsigned reports=0;bool audit=worldLogEnabled&&reports<300&&Snapshot(reinterpret_cast<void*>(self),&table,4)&&table==0x8AA828&&
+  Snapshot(reinterpret_cast<void*>(self+0x94),&driver,4)&&driver==2&&Snapshot(reinterpret_cast<void*>(self-0x80+8),&handle,4)&&Snapshot(position,requested,12);
+ if(audit)Copy(&reinterpret_cast<NFSPluginSDK::MW05::IVehicle*>(self)->GetPosition(),before,12);
+ const bool placed=originalVehiclePlace(self,position,direction);
+ if(audit){++reports;Copy(&reinterpret_cast<NFSPluginSDK::MW05::IVehicle*>(self)->GetPosition(),after,12);
+  const auto caller=unsigned(_ReturnAddress());
+  Log("NATIVE_COP_PLACEMENT handle=%u caller=%08X result=%u requested=%.3f,%.3f,%.3f before=%.3f,%.3f,%.3f after=%.3f,%.3f,%.3f observer_only=1",handle,caller,unsigned(placed),requested[0],requested[1],requested[2],before[0],before[1],before[2],after[0],after[1],after[2]);
+  static std::set<unsigned> seen;if(seen.insert(caller).second){void* frames[10]{};const auto count=CaptureStackBackTrace(0,10,frames,nullptr);for(unsigned i=0;i<count;++i)Log("NATIVE_COP_PLACEMENT_STACK caller=%08X index=%u address=%08X",caller,i,unsigned(frames[i]));}
+ }
+ return placed;
+}
+bool InstallVehiclePlacementGuard(){
+ if(originalVehiclePlace)return true;
+ const BYTE guard[]={0x6A,0xFF,0x64,0xA1,0,0,0,0,0x68,0x58,0xB7,0x87,0};
+ auto site=reinterpret_cast<void*>(0x685810);
+ if(memcmp(site,guard,sizeof(guard))||MH_CreateHook(site,VehiclePlace,reinterpret_cast<void**>(&originalVehiclePlace))!=MH_OK)return false;
+ if(MH_EnableHook(site)==MH_OK)return true;
+ MH_RemoveHook(site);originalVehiclePlace=nullptr;return false;
+}
+bool Heap(const char* boundary,bool quiet=false){
+ if(!worldLogEnabled)return true;
+ constexpr unsigned head=0x90DFF4;unsigned at=0,previous=head,count=0;bool valid=Snapshot(reinterpret_cast<void*>(head),&at,4);
+ for(;valid&&at!=head&&count<8192;++count){
+  unsigned words[4]{};valid=Snapshot(reinterpret_cast<void*>(at),words,sizeof(words));
+  if(!valid||words[1]!=previous||words[3]!=0x44443333){Log("NATIVE_HEAP_LINK boundary=%s valid=0 node=%08X previous=%08X next=%08X back=%08X size=%u marker=%08X nodes=%u read_only=1",boundary,at,previous,words[0],words[1],words[2],words[3],count);return false;}
+  previous=at;at=words[0];
+ }
+ if(!quiet)Log("NATIVE_HEAP_LINK boundary=%s valid=%u nodes=%u end=%08X read_only=1",boundary,unsigned(valid&&at==head),count,at);return valid&&at==head;
+}
 void(__thiscall* originalBonusTime)(void*,float)=nullptr;
 void __fastcall BonusTime(void* self,void*,float seconds){
  float before=0,after=0;unsigned crossedBefore=0,crossedAfter=0;
@@ -60,6 +140,8 @@ void __declspec(naked) ReportBridge(){
 }
 void Install(){
  if(!worldLogEnabled)return;
+ if(InstallRoadPlacementGuard())Log("NATIVE_COP_ROAD_PLACEMENT_OBSERVER enabled=1 no_pose_writes=1 rpd_guard_independent_of_logging=1");
+ if(InstallVehiclePlacementGuard())Log("NATIVE_COP_PLACEMENT_OBSERVER enabled=1 no_pose_writes=1 maximum_reports=300 rpd_guard_independent_of_logging=1");
  const BYTE bonusGuard[]={0x53,0x8B,0xD9,0x8B,0x83,0x58,0x19,0,0};
  auto bonus=reinterpret_cast<void*>(0x5FE600);
  if(!memcmp(bonus,bonusGuard,sizeof(bonusGuard))&&MH_CreateHook(bonus,BonusTime,reinterpret_cast<void**>(&originalBonusTime))==MH_OK){

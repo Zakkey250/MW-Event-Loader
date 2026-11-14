@@ -10,6 +10,7 @@ RoadblockFn originalRoadblock=nullptr;
 void* roadblockCommitTrampoline=nullptr;
 bool __fastcall PlaceRoadblock(unsigned manager,void*,unsigned pursuit,unsigned type,unsigned option,unsigned output){
  if((Active()||gauntlet_runtime::Duel())&&!SupportAllowed(pursuit))return false;
+ if(const auto p=event_race_policies::Current();p&&mwel_rpd::Armed(p->authoring)&&!p->authoring.at("policeAutoRoadblock").get<bool>())return false;
  candidateKnown=false;
  ++roadblockDepth;
  bool result=false;

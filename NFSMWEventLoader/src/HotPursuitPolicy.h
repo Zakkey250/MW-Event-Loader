@@ -15,8 +15,10 @@ inline float RollingSpeed(float targetMps,float targetGap){
  return std::max(RollingSpeed(targetMps),targetGap>35.f?8.f:0.f);
 }
 
-inline float PoliceContactScale(bool hotPursuit,unsigned victimDriver,unsigned otherDriver){
- return hotPursuit&&(victimDriver==0||victimDriver==3)&&otherDriver==2?.5f:1.f;
+inline constexpr float AlliedAttackScale=.8f;
+inline float PoliceContactScale(bool hotPursuit,unsigned victimDriver,unsigned otherDriver,bool policeSprint=false){
+ if(!hotPursuit||otherDriver!=2||(victimDriver!=0&&victimDriver!=3))return 1.f;
+ return .5f*(policeSprint&&victimDriver==3?AlliedAttackScale:1.f);
 }
 inline bool StartEligible(float racePercent){return std::isfinite(racePercent)&&racePercent>25.f&&racePercent<=100.f;}
 struct ReplacementWindow {

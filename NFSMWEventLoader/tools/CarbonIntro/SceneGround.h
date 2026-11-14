@@ -1,10 +1,27 @@
 #pragma once
 #include "../../src/GeometryQueries.h"
+#include "../../src/SceneRoadCamera.h"
 // Use the same active-world geometry provider as grid placement and NeoAI.
 // The old 44A3C0 helper only knows native MW height data in the W2C world.
 struct SceneGround {
  event_geometry::WorldQueries geometry;
  bool diagnostics=false;unsigned hits=0,misses=0;
+ bool CameraPocketClear(const D3DXVECTOR3& eye){
+  if(geometry.nodes.empty())return false;
+  event_geometry::WorldQueries::RayQueryScope scope(geometry);
+  for(D3DXVECTOR3 d:{D3DXVECTOR3(.4f,0,0),D3DXVECTOR3(-.4f,0,0),D3DXVECTOR3(0,.4f,0),D3DXVECTOR3(0,-.4f,0),D3DXVECTOR3(0,0,.4f),D3DXVECTOR3(0,0,-.4f)}){
+   const auto p=eye+d;event_geometry::RayHit hit;if(geometry.Ray({-eye.y,eye.z,eye.x},{-p.y,p.z,p.x},hit,true,true))return false;
+  }return true;
+ }
+ bool ConstrainCamera(const D3DXVECTOR3& focus,D3DXVECTOR3& eye){
+  if(geometry.nodes.empty())return false;
+  event_geometry::WorldQueries::RayQueryScope scope(geometry);
+  mwel_scene_road::Point point{eye.x,eye.y,eye.z};
+  const bool clipped=mwel_scene_road::ClipCameraBoom({focus.x,focus.y,focus.z},point,[&](auto a,auto b,float& fraction){
+   event_geometry::RayHit hit;if(!geometry.Ray({-a.y,a.z,a.x},{-b.y,b.z,b.x},hit,true,true))return false;fraction=hit.fraction;return true;
+  });
+  if(clipped)eye={point.x,point.y,point.z};return clipped;
+ }
  bool Query(const D3DXVECTOR3& map,float& height,D3DXVECTOR3* normal=nullptr){
   if(!geometry.nodes.empty()){
    event_geometry::WorldQueries::RayQueryScope scope(geometry);

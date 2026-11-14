@@ -3,6 +3,9 @@
 namespace gauntlet_pursuit {
 void* cooldownTrampoline=nullptr;void* meterTrampoline=nullptr;
 bool __cdecl Owned(unsigned primary){
+ // Police missions must be able to fail when their real suspect completes
+ // native evade/cooldown. The racer-side combat escape cap does not apply.
+ if(const auto p=event_race_policies::Current();p&&mwel_rpd::Armed(p->authoring))return false;
  unsigned manager=0,pursuit=0;
  if(hot_pursuit_runtime::Active()&&hot_pursuit_runtime::owner&&
     hot_pursuit_runtime::owner==MWELNeoCurrentKey()&&combat_health_runtime::Racing()&&

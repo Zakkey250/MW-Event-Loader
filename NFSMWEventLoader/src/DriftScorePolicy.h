@@ -18,7 +18,7 @@ struct Sample {
 };
 struct Score {
  double lastTime=-1,quiet=0,chainSeconds=0,pending=0,progressTime=0,rearmTime=-1,rearmTravel=0;
- float x=0,z=0,speed=0,bestProgress=0,displayAngle=0;
+ float x=0,z=0,speed=0,bestProgress=0,displayAngle=0,bestAngle=0;
  float rearmProgress=0,rearmLast=0;
  std::uint32_t total=0,bestChain=0,noticeAmount=0;bool finished=false,primed=false,progressRearm=false;
  Notice notice=Notice::None;double noticeUntil=0;unsigned bonusFlags=0;
@@ -60,7 +60,7 @@ struct Score {
   const float angle=std::abs(s.angle);
   bool sliding=s.grounded&&s.speed>5&&angle>=9&&angle<=80&&moved>=dt*2&&advancing&&s.time-progressTime<2;
   if(sliding){
-   quiet=0;chainSeconds+=dt;displayAngle=angle;
+   quiet=0;chainSeconds+=dt;displayAngle=angle;bestAngle=std::max(bestAngle,angle);
    const double v2=double(s.speed)*s.speed;
    bonusFlags=unsigned(s.nearWall)|(unsigned(s.nearCar)<<1);
    const double earned=v2*v2*.0002*dt*(1.+.25*unsigned(s.nearWall)+.25*unsigned(s.nearCar));

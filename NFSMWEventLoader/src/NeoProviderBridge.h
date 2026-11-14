@@ -5,6 +5,8 @@ bool MWELNeoCourseFacing(unsigned handle,const float* position,const float* head
 #include "GridPolicy.h"
 bool MWELFitGrid(unsigned key,unsigned count,const mwel_grid::Position& origin,float rotation,mwel_grid::Layout& layout);
 bool MWELPrepareNeoCourse(unsigned key);
+bool MWELPlayerResetPose(unsigned key,unsigned leg,unsigned vehicle,float* position,float* heading);
+bool MWELPlayerResetCourseReady(unsigned key);
 unsigned MWELNeoCurrentKey();
 bool MWELNeoCourseEnabled();
 bool MWELNeoCourseFile(unsigned key,const char* suffix,char* output,unsigned size);
@@ -19,4 +21,6 @@ bool MWELNeoRouteProgress(unsigned handle,unsigned edge,float* station,unsigned*
 bool MWELNeoRecoveryResumed(unsigned handle,unsigned edge);
 
 bool MWELCourseAhead(unsigned key,const float* position,unsigned leg,float metres,float* point,float* forward);
+bool MWELCourseProjection(unsigned key,const float* position,unsigned leg,float& station,float& distance);
 bool MWELPrepareGauntletRoad(unsigned key);
+bool MWELRpdReinforcementAhead(unsigned handle,const float* position,const float* forward,float* point,float* tangent);

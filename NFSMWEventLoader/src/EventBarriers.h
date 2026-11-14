@@ -5,3 +5,4 @@ bool MWELPrepareBarriers(const std::vector<mwel::EventPackage>& packages,bool pr
 bool MWELCompleteBarriers();
 bool MWELBarrierSegments(unsigned key,std::vector<MWELBarrierSegment>& output);
 bool MWELBarrierFrame();
+bool MWELRpdOfficerIgnoresGuards(unsigned worldId);

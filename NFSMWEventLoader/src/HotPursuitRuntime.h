@@ -9,6 +9,7 @@ std::string model;
 
 std::array<unsigned,16> eligibleHandles{};
 bool playerPursuitStarted=false;
+bool patrolBootstrapDone=false;
 hot_pursuit::ReplacementWindow replacements;
 struct Perp {unsigned handle=0,component=0;float original=0,written=0;};
 std::array<Perp,16> perps{};
@@ -23,8 +24,8 @@ std::array<Lost,32> lost{};
 
 bool Current(){auto p=event_race_policies::Current();return p&&p->authoring.value("combatMode",std::string("none"))=="hotpursuit";}
 bool Active(){unsigned race=0,play=0,count=0;return !draining&&Current()&&combat_health_runtime::Read(0x91E000,race)&&
- combat_health_runtime::Read(race+0x1960,play)&&play==1&&combat_health_runtime::Read(race+0x1958,count)&&count>1&&count<=8;}
-unsigned Budget(){unsigned race=0,count=0;return Active()&&combat_health_runtime::Read(0x91E000,race)&&combat_health_runtime::Read(race+0x1958,count)?mwcombat::PoliceBudget(count):0;}
+ combat_health_runtime::Read(race+0x1960,play)&&play==1&&combat_health_runtime::Read(race+0x1958,count)&&count>1&&count<=(MWELRpdHotPursuitScope()?9u:8u);}
+unsigned Budget(){if(const auto p=event_race_policies::Current();p&&mwel_rpd::Armed(p->authoring))return mwel_rpd::Allies(p->authoring);unsigned race=0,count=0;return Active()&&combat_health_runtime::Read(0x91E000,race)&&combat_health_runtime::Read(race+0x1958,count)?mwcombat::PoliceBudget(count):0;}
 using DetectFn=bool(__thiscall*)(unsigned,unsigned);
 DetectFn originalDetect=nullptr;
 using TargetFn=void(__thiscall*)(unsigned,unsigned);
@@ -42,6 +43,7 @@ std::array<unsigned,16> createdPursuits{};
 std::array<unsigned,16> createdTargets{};
 std::array<ULONGLONG,16> nextPursuitCreate{};
 void ReleaseGroups();
+bool ReleaseGroundSupport(unsigned pursuit,unsigned departing=0);
 std::vector<unsigned> NativeGroups();
 
 extern unsigned roadblockDepth;
@@ -61,11 +63,13 @@ bool Surface(){
  const BYTE block[]={0x6A,0xFF,0x68,0x16,0x95,0x86,0},commit[]={0x8B,0x0E,0xC7,0x46,0x78,2,0,0,0};
  const BYTE factory[]={0x6A,0xFF,0x68,0x02,0x99,0x86,0,0x64};
  const BYTE patrol[]={0xC7,0x86,0x90,0,0,0};
+ const BYTE formation[]={0x51,0x53,0x55,0x8B,0xE9,0x8B,0x45,0x78};
  const BYTE total[]={0x89,0x86,0x84,0,0,0},platform[]={0x89,0x86,0x8C,0,0,0},active[]={0x89,0x86,0x98,0,0,0};
  return SupportSurface()&&(originalRoadblock||(Copy(reinterpret_cast<void*>(0x43DD30),bytes,7)&&!memcmp(bytes,block,7)))&&
   (roadblockCommitTrampoline||(Copy(reinterpret_cast<void*>(0x43E7DF),bytes,8)&&!memcmp(bytes,commit,8)&&*reinterpret_cast<const BYTE*>(0x43E7E7)==0))&&
   (originalPursuitSpawn||(Copy(reinterpret_cast<void*>(0x430E60),bytes,8)&&!memcmp(bytes,pursuitSpawn,8)))&&
   Copy(reinterpret_cast<void*>(0x443270),bytes,8)&&!memcmp(bytes,factory,8)&&
+  Copy(reinterpret_cast<void*>(0x42B410),bytes,8)&&!memcmp(bytes,formation,8)&&
   (originalTarget||(Copy(reinterpret_cast<void*>(0x423860),bytes,6)&&!memcmp(bytes,acquireTarget,6)))&&
   (originalActivity||(Copy(reinterpret_cast<void*>(0x6FBF80),bytes,8)&&!memcmp(bytes,activity,8)))&&
   (originalRelease||(Copy(reinterpret_cast<void*>(0x406450),bytes,6)&&!memcmp(bytes,release,6)))&&
@@ -84,3 +88,5 @@ unsigned MWELHotPursuitBudget(){return hot_pursuit_runtime::Budget();}
 bool MWELHotPursuitAcquire(unsigned);
 bool MWELHotPursuitRetain(unsigned);
 bool MWELHotPursuitSpawnAllowed(bool);
+bool MWELHotPursuitAmbientPatrolAllowed();
+void MWELHotPursuitPatrolSpawned();

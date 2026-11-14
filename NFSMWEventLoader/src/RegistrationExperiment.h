@@ -27,6 +27,8 @@ struct Clone {
  bool character=false;
  bool gridValidated=false;
  bool gauntlet=false,hotPursuit=false;
+ const char* rpdLaunchPreset=nullptr;
+ bool rpdUsesOwnCar=false;
  std::vector<unsigned> gridPositions;
  std::vector<std::unique_ptr<std::string>> strings;
  std::vector<std::unique_ptr<std::vector<BYTE>>> arrays;
@@ -57,6 +59,7 @@ thread_local Clone* activatingOwner=nullptr;
 bool(__thiscall* originalScopeContains)(void*,void*);
 bool(__thiscall* originalScopeCommand)(void*,unsigned,void*);
 void(__thiscall* originalSetParent)(Collection*,unsigned);
+unsigned(__cdecl* originalNumReferences)(unsigned);
 // Bounded lab objects live until process teardown. A release loader must add
 // vault unload/retry ownership before this mechanism can be enabled normally.
 std::map<unsigned,void*> geometryObjects;
@@ -111,7 +114,11 @@ void* GeometryObject(unsigned key,bool marker){
  if(isMarker!=marker)return nullptr;
  auto manager=*reinterpret_cast<BYTE**>(0x91E00C);
  unsigned capacity=0,table=0;
- if(!manager||!Copy(manager+0x6C,&capacity,4)||!Copy(manager+0x78,&table,4)||!table||capacity<clones.size()+16){Log("EXPERIMENT_REFUSED geometry_manager_capacity");return nullptr;}
+ // This table holds live native geometry, not every authored collection in
+ // every installed package. Race/opponent/attribute clones consume no slot
+ // until their geometry is constructed. Check the actual table and its
+ // occupancy below; the installed library size must not block an event.
+ if(!manager||!Copy(manager+0x6C,&capacity,4)||!Copy(manager+0x78,&table,4)||!table||capacity<2||capacity>65536){Log("EXPERIMENT_REFUSED geometry_manager_capacity capacity=%u authored_collections=%u",capacity,unsigned(clones.size()));return nullptr;}
  if(auto it=geometryObjects.find(key);it!=geometryObjects.end()){
   bool registered=false;for(unsigned i=0;i<capacity;++i){unsigned object=0;if(!Copy(reinterpret_cast<void*>(table+i*8+4),&object,4))return nullptr;registered|=object==unsigned(it->second);}
   Collection* owner=nullptr;unsigned actualKey=0;
@@ -138,7 +145,7 @@ void* GeometryObject(unsigned key,bool marker){
  }
  if(worldLogEnabled&&clone->correction&&!clone->race&&!clone->character&&!marker){float position[3]{};Copy(static_cast<BYTE*>(object)+0x58,position,12);Log("EVENT_NATIVE_SCRIPT_TRIGGER_POSE key=%08X world=%.4f,%.4f,%.4f identity_unchanged=1",key,position[0],position[1],position[2]);}
  geometryObjects.emplace(key,object);
- Log("EXPERIMENT_NATIVE_GEOMETRY_OBJECT key=%08X kind=%s object=%08X constructor=%08X manager_free=%u",key,clone->character?"character":marker?"startgrid":"trigger",unsigned(object),ctor,capacity-occupied-1);
+ Log("EXPERIMENT_NATIVE_GEOMETRY_OBJECT key=%08X kind=%s object=%08X constructor=%08X manager_free=%u manager_capacity=%u authored_collections=%u",key,clone->character?"character":marker?"startgrid":"trigger",unsigned(object),ctor,capacity-occupied-1,capacity,unsigned(clones.size()));
  return object;
 }
 bool ReleaseGeometry(unsigned owner,bool characters=false){
@@ -275,7 +282,14 @@ bool WarpOwnedPlayer(unsigned owner,void* start){
  float vehicleBasis[3]{-direction[2],direction[1],direction[0]};
  memcpy(pose+0x34,vehicleBasis,12);memcpy(position,pose+0x28,12);
  Log("EVENT_NATIVE_PLAYER_START_POSE owner=%08X position=%.3f,%.3f,%.3f marker_direction=%.4f,%.4f,%.4f warp_basis=%.4f,%.4f,%.4f native_warp=1",owner,position[0],position[1],position[2],direction[0],direction[1],direction[2],vehicleBasis[0],vehicleBasis[1],vehicleBasis[2]);
- originalWarpPlayerToTrigger(pose);return true;
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+ const auto warpStarted=GetTickCount64();Log("PRIVATE_RESTART_WARP phase=begin owner=%08X",owner);
+#endif
+ originalWarpPlayerToTrigger(pose);
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+ Log("PRIVATE_RESTART_WARP phase=end owner=%08X elapsed_ms=%llu",owner,GetTickCount64()-warpStarted);
+#endif
+ return true;
 }
 void __cdecl WarpPlayerToTrigger(void* marker){
  // Restart commands run after ActivateEvent has returned and may resolve
@@ -292,7 +306,13 @@ void __cdecl WarpPlayerToTrigger(void* marker){
   }
   Log("EXPERIMENT_RACE_ABORT owned_player_start_marker_missing");return;
  }
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+ const auto warpStarted=GetTickCount64();Log("PRIVATE_RESTART_WARP phase=begin marker=%08X",unsigned(marker));
+#endif
  originalWarpPlayerToTrigger(marker);
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+ Log("PRIVATE_RESTART_WARP phase=end marker=%08X elapsed_ms=%llu",unsigned(marker),GetTickCount64()-warpStarted);
+#endif
 }
 void* __fastcall Attribute(void* self,void*,unsigned field,unsigned index){
  // Use the native explicit-placement path for owned grids. A source spawn's
@@ -316,12 +336,14 @@ void* __fastcall Attribute(void* self,void*,unsigned field,unsigned index){
  return originalAttribute(self,field,index);
 }
 void __cdecl InitRacers(void* marker){
+ native_runtime_diagnostics::Heap("before_init_racers");
  // Inherited trigger programs may retain the source course's start reference.
  // Only an active owned course substitutes its own native GMarker; stock
  // event callbacks retain their original argument and native behavior.
  auto owner=MWELNeoCurrentKey();auto clone=Find(owner);
  Log("EVENT_NATIVE_GRID_ENTRY owner=%08X correction=%u incoming=%08X flow=%u preflight_validated=%u",owner,unsigned(clone&&clone->correction),unsigned(marker),*reinterpret_cast<unsigned*>(0x925E90),unsigned(clone&&clone->gridValidated));
  if(clone&&clone->race&&authoredGeometry){
+  for(const auto& package:packages)if(package.nativeNamespace==clone->name&&!touge_grid::Ensure(package)){Log("EXPERIMENT_RACE_ABORT touge_native_grid_unavailable owner=%08X",owner);return;}
   for(const auto& child:clones)if(child->ownerKey==owner&&!child->placement&&child->templateKey==0xAAF8BB9C){
    auto start=GeometryObject(child->collection.key,true);
    // Registration has already fitted every extended placement. Preserve the
@@ -333,7 +355,8 @@ void __cdecl InitRacers(void* marker){
     unsigned players=0;Copy(reinterpret_cast<void*>(0x92D884),&players,4);
     if(!players||players>8){Log("EXPERIMENT_RACE_ABORT owned_player_not_available count=%u",players);return;}
     Log("EVENT_NATIVE_PLAYER_START_COMMAND owner=%08X omitted_command_restored=1 world_reload=0",owner);
-    if(!WarpOwnedPlayer(owner,start))return;
+   if(!WarpOwnedPlayer(owner,start))return;
+   native_runtime_diagnostics::Heap("after_owned_player_warp");
    }
    // A borrowed opponent attribute from another bin has no GCharacter in
    // this event's native vault. Extra rivals own real native character
@@ -345,7 +368,7 @@ void __cdecl InitRacers(void* marker){
    unsigned actual=0;auto race=*reinterpret_cast<BYTE**>(0x91E000);if(race)Copy(race+0x1958,&actual,4);
    Log("EVENT_NATIVE_FIELD_COUNT owner=%08X requested=%u actual=%u count_matches=%u native_capacity=16",owner,unsigned(clone->gridPositions.size()),actual,unsigned(actual==clone->gridPositions.size()));
    if(actual>16){Log("EXPERIMENT_RACE_ABORT authored_field_count_invalid_before_init");return;}
-   bool previous=initializingOwnedGrid;auto previousOwner=initializingGridOwner;initializingGridOwner=clone;initializingOwnedGrid=true;originalInitRacers(start);initializingOwnedGrid=previous;initializingGridOwner=previousOwner;unsigned initialized=0;if(race)Copy(race+0x1958,&initialized,4);Log("EVENT_NATIVE_FIELD_COUNT_AFTER_INIT owner=%08X requested=%u actual=%u count_matches=%u",owner,unsigned(clone->gridPositions.size()),initialized,unsigned(initialized==clone->gridPositions.size()));if(!initialized||initialized>16||initialized!=(clone->gauntlet?1u:unsigned(clone->gridPositions.size())))Log("EXPERIMENT_RACE_ABORT authored_field_count_mismatch_after_init");return;
+   bool previous=initializingOwnedGrid;auto previousOwner=initializingGridOwner;initializingGridOwner=clone;initializingOwnedGrid=true;originalInitRacers(start);native_runtime_diagnostics::Heap("after_init_racers");initializingOwnedGrid=previous;initializingGridOwner=previousOwner;unsigned initialized=0;if(race)Copy(race+0x1958,&initialized,4);Log("EVENT_NATIVE_FIELD_COUNT_AFTER_INIT owner=%08X requested=%u actual=%u count_matches=%u",owner,unsigned(clone->gridPositions.size()),initialized,unsigned(initialized==clone->gridPositions.size()));if(!initialized||initialized>16||initialized!=(clone->gauntlet?1u:unsigned(clone->gridPositions.size())))Log("EXPERIMENT_RACE_ABORT authored_field_count_mismatch_after_init");return;
   }
   Log("EXPERIMENT_RACE_ABORT owned_start_marker_missing owner=%08X",owner);return;
  }
@@ -397,7 +420,7 @@ void* __fastcall FindVault(void* self,void*,unsigned key){
   // Database enumeration asks for vaults before the runtime-object manager
   // exists. Keep that lookup read-only; mount objects when it is available.
   BYTE* manager=nullptr;unsigned capacity=0,table=0;
-  bool managerReady=Copy(reinterpret_cast<void*>(0x91E00C),&manager,4)&&manager&&Copy(manager+0x6C,&capacity,4)&&Copy(manager+0x78,&table,4)&&table&&capacity>=clones.size()+16;
+  bool managerReady=Copy(reinterpret_cast<void*>(0x91E00C),&manager,4)&&manager&&Copy(manager+0x6C,&capacity,4)&&Copy(manager+0x78,&table,4)&&table&&capacity>=2&&capacity<=65536;
   if(authoredGeometry&&managerReady)for(const auto& child:clones)if(child->ownerKey==key&&!child->placement&&!GeometryObject(child->collection.key,child->templateKey==0xAAF8BB9C)){
    Log("EXPERIMENT_RACE_ABORT owned_geometry_unavailable event=%08X child=%08X",key,child->collection.key);return nullptr;
   }
@@ -433,8 +456,8 @@ void OwnNodeData(Clone& clone,Node& node){
  if(type==0x30&&stride==12)for(unsigned i=0;i<count;++i)*reinterpret_cast<unsigned*>(bytes->data()+offset+i*stride+8)=0;
  node.value=reinterpret_cast<unsigned>(bytes->data());clone.arrays.push_back(std::move(bytes));
 }
-Collection* __fastcall GetCollection(void* self,void*,unsigned key){unsigned classKey=0;if(Copy(self,&classKey,4))if(auto fx=MWELCarbonEffectCollection(classKey,key))return static_cast<Collection*>(fx);if(GameplayClass(self))if(auto c=Find(key)){Log("EXPERIMENT_COLLECTION_LOOKUP key=%08X",key);return &c->collection;}return getCollection(self,key);}
-Collection* __cdecl FindCollection(unsigned classKey,unsigned key){if(auto fx=MWELCarbonEffectCollection(classKey,key))return static_cast<Collection*>(fx);if(classKey==0x5CEA9D46)if(auto c=Find(key)){Log("EXPERIMENT_GLOBAL_LOOKUP key=%08X",key);return &c->collection;}return findCollection(classKey,key);}
+Collection* __fastcall GetCollection(void* self,void*,unsigned key){unsigned classKey=0;if(Copy(self,&classKey,4)){if(auto player=MWELRpdPlayerCollection(classKey,key))return static_cast<Collection*>(player);if(auto fx=MWELCarbonEffectCollection(classKey,key))return static_cast<Collection*>(fx);}if(GameplayClass(self))if(auto c=Find(key)){Log("EXPERIMENT_COLLECTION_LOOKUP key=%08X",key);return &c->collection;}return getCollection(self,key);}
+Collection* __cdecl FindCollection(unsigned classKey,unsigned key){if(auto player=MWELRpdPlayerCollection(classKey,key))return static_cast<Collection*>(player);if(auto fx=MWELCarbonEffectCollection(classKey,key))return static_cast<Collection*>(fx);if(classKey==0x5CEA9D46)if(auto c=Find(key)){Log("EXPERIMENT_GLOBAL_LOOKUP key=%08X",key);return &c->collection;}return findCollection(classKey,key);}
 unsigned AppendedAfter(unsigned key){bool found=!key;for(auto& clone:clones){if(clone->correction||clone->placement)continue;if(found)return clone->collection.key;if(clone->collection.key==key)found=true;}return 0;}
 unsigned __fastcall FirstCollection(void* self,void*){unsigned key=firstCollection(self);return key?key:(enumerateAdditional&&GameplayClass(self)?AppendedAfter(0):0);}
 unsigned __fastcall NextCollection(void* self,void*,unsigned key){
@@ -536,7 +559,7 @@ void PreserveNativeMarkers(Clone& raceClone,const mwel::EventPackage& package,vo
  }
  unsigned index=0;
  for(const auto& marker:extras){
-  const unsigned ordinal=index++;if(marker.value("nativeTemplate","")=="speedtrap")continue;
+  const unsigned ordinal=index++;if(marker.value("nativeTemplate","")=="speedtrap"||marker.value("nativeTemplate","")=="touge_fall")continue;
   unsigned match=0;const auto identity=marker.value("nativeSourceName",std::string());
   if(completeLegacy)match=sourceExtras[ordinal];
   else for(unsigned key:sourceExtras){
@@ -599,6 +622,17 @@ void RaceProperties(Clone& clone,Fields& fields,const mwel::EventPackage& packag
   }
  }
  const auto mode=package.authoring.at("mode").get<std::string>();
+ if(mwel_rpd::CaseFile(package.authoring)&&mwel_rpd::Undercover(package.authoring)){
+  // The native player creation path uses the selected garage record when
+  // PlayerCarType is absent, retaining its parts, upgrades and tuning.
+  Log("RPD_UNDERCOVER_START owner=%08X native_selected_player_car=1 garage_car_written=0",clone.collection.key);
+ }else if(mwel_rpd::CaseFile(package.authoring)&&!mwel_rpd::InGameSelected(package.authoring)){
+  const auto selected=package.authoring.at("policeVehicle").get<std::string>();
+  const auto preset=MWELRpdLoanPreset(selected);
+  if(preset.empty())throw std::runtime_error("RPD player loan preset unavailable");
+  Text(clone,fields,"PlayerCarType",preset);
+  Log("RPD_NATIVE_LOAN_VEHICLE owner=%08X selected=%s preset=%s garage_car_written=0",clone.collection.key,selected.c_str(),preset.c_str());
+ }
  if(mode=="tollboothrace"&&!mwel::Correction(package.authoring))Text(clone,fields,"IntroNIS","IntroNisToll01");
  clone.gauntlet=package.authoring.value("combatMode",std::string("none"))=="gauntlet";
  clone.hotPursuit=package.authoring.value("combatMode",std::string("none"))=="hotpursuit";
@@ -662,7 +696,7 @@ void AuditRaceProperties(Clone& clone,const mwel::EventPackage& package){
  if(!visibility||!Copy(visibility,&visible,1)||visible!=unsigned(mwel::Feature(package.authoring,"checkpointsVisible")))throw std::runtime_error("native checkpoint visibility differs");
  Log("EVENT_NATIVE_CHECKPOINT_VISIBILITY owner=%08X visible=%u native_lookup_verified=1",clone.collection.key,unsigned(visible));
  auto cashPointer=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x454190)(&clone.collection,Hash("CashValue"),0);float cash=0;
- const auto expectedCash=native_cash::Value(package.authoring.at("cashValue").get<unsigned>());
+ const auto expectedCash=native_cash::Value(mwel_rpd::CaseFile(package.authoring)?0u:package.authoring.at("cashValue").get<unsigned>());
  if(!cashPointer||!Copy(cashPointer,&cash,4)||cash!=expectedCash)throw std::runtime_error("native race property lookup differs: CashValue float32");
  Log("EVENT_NATIVE_CASH_ATTRIBUTE key=%08X authored=%u value=%.0f storage=float32 native_lookup_verified=1",clone.collection.key,package.authoring.at("cashValue").get<unsigned>(),double(cash));
  if(!mwel::Correction(package.authoring))field("ProgressionLevel",package.authoring.at("blacklistNo").get<unsigned>());
@@ -711,13 +745,15 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
     if(!placementKey||getCollection(klass,placementKey)||Find(placementKey))throw std::runtime_error("grid placement identity collision");
     placement->collection.key=placementKey;placement->collection.references=1;placement->collection.layout=placement->layout;placement->collection.name=&placement->namePointer;placement->layout[0]=unsigned(placement->name.c_str());
     auto placementFields=ReadFields(*placement);Scalar(placementFields,"Name",unsigned(placement->name.c_str()),1);
-    auto position=gate.at("position");const double back=2.0+7.0*(slot/2),side=count==1?0.0:(slot%2?1.5:-1.5);
+    const bool splitStart=mwel::RpdStartOnly(package.authoring);
+    const auto& authoredStart=splitStart&&slot==1?mwel::RpdRacerStart(package.authoring):gate;
+    auto position=authoredStart.at("position");const double back=splitStart?0.0:2.0+7.0*(slot/2),side=splitStart||count==1?0.0:(slot%2?1.5:-1.5);
     position[0]=position[0].get<double>()-std::cos(radians)*back-std::sin(radians)*side;
     position[1]=position[1].get<double>()-std::sin(radians)*back+std::cos(radians)*side;
     // ForceStartPosition consumes the marker rotation as a course tangent.
     // It is not the raw WarpPlayerToTrigger pose basis. Native NIS overwrites
     // the first four cars, hiding a +90-degree error on the remaining grid.
-    float placementRotation=rotation;unsigned placementBits=0;memcpy(&placementBits,&placementRotation,4);
+    float placementRotation=splitStart?authoredStart.at("rotation").get<float>():rotation;unsigned placementBits=0;memcpy(&placementBits,&placementRotation,4);
     Scalar(placementFields,"Rotation",placementBits,9);
     Vector(*placement,placementFields,"Position",position);Rebuild(*placement,placementFields);
     raceClone.gridPositions.push_back(placementKey);
@@ -727,6 +763,7 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
   }
   clones.push_back(std::move(child));
  }
+ if(mwel::RpdStartOnly(package.authoring))Scalar(fields,"racefinish",0,0x30);
  PreserveNativeMarkers(raceClone,package,klass,children);
  References(raceClone,fields,"Checkpoint",checkpoints);References(raceClone,fields,"Children",children);References(raceClone,fields,"Shortcuts",shortcuts);
  References(raceClone,fields,"SpeedTrapList",speedtraps);
@@ -735,7 +772,7 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
  for(const auto& barrier:package.authoring.value("barriers",mwel::Json::array()))if(!barrier.contains("position")||barrier.at("position").is_null())barriers.push_back((barrier.value("reverse",false)?"*":"")+barrier.at("name").get<std::string>());
  Strings(raceClone,fields,"Barriers",barriers);
  Log("EXPERIMENT_AUTHORED_BARRIERS native_groups=%u template_barriers_inherited=0",unsigned(barriers.size()));
- Scalar(fields,"CashValue",native_cash::Bits(package.authoring.at("cashValue").get<unsigned>()),9);
+ Scalar(fields,"CashValue",native_cash::Bits(mwel_rpd::CaseFile(package.authoring)?0u:package.authoring.at("cashValue").get<unsigned>()),9);
  if(!mwel::Correction(package.authoring))Scalar(fields,"ProgressionLevel",package.authoring.at("blacklistNo").get<unsigned>(),8);
   Scalar(fields,"NumLaps",mwel::RaceLaps(package.authoring),8);Scalar(fields,"CopsInRace",raceClone.gauntlet||raceClone.hotPursuit||package.authoring.at("cops").get<bool>()?1:0,6);
   Scalar(fields,"CopDensity",raceClone.gauntlet?0u:unsigned(std::lround(package.authoring.at("copDensity").get<double>())),8);
@@ -750,6 +787,7 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
   Scalar(fields,"IsLoopingRace",mode=="circuit"||mode=="lapknockout",6);
   Scalar(fields,"KnockoutsPerLap",mode=="lapknockout",8);
   if(mode=="tollboothrace"){float seconds=package.authoring.at("timeLimit").get<float>();unsigned bits=0;memcpy(&bits,&seconds,4);Scalar(fields,"TimeLimit",bits,9);}
+  if(mwel_rpd::Armed(package.authoring)){float seconds=mwel_rpd::PoliceSprint(package.authoring)?0.f:package.authoring.at("policeTimeLimit").get<float>();unsigned bits=0;memcpy(&bits,&seconds,4);Scalar(fields,"TimeLimit",bits,9);}
  Rebuild(raceClone,fields);
   Log("EXPERIMENT_AUTHORED_GEOMETRY objects=%u checkpoints=%u shortcuts=%u native_file_modified=0",unsigned(children.size()),unsigned(checkpoints.size()),unsigned(shortcuts.size()));
 }
@@ -795,7 +833,7 @@ void AuditBins(void* klass){
 void MountCareerBins(void* klass){
  std::map<unsigned,std::vector<unsigned>> additions;
  for(const auto& package:packages){
-  if(mwel::Correction(package.authoring))continue;
+  if(mwel::Correction(package.authoring)||mwel_rpd::CaseFile(package.authoring))continue;
   auto race=std::find_if(clones.begin(),clones.end(),[&](const auto& clone){return clone->race&&clone->name==package.nativeNamespace;});
   if(race==clones.end()){Log("EVENT_CAREER_REGISTRATION_SKIPPED id=%s reason=event_preflight_refused",package.id.c_str());continue;}
   additions[package.authoring.at("blacklistNo").get<unsigned>()].push_back((*race)->collection.key);
@@ -887,6 +925,30 @@ void Prepare(){
  }
  try{MountCareerBins(klass);}catch(...){clones.clear();throw;}
 }
+unsigned __cdecl NumReferences(unsigned key){
+ const auto native=originalNumReferences(key);unsigned reserve=0;
+ // GManager sizes its streamed vault slots before GDatabase's constructor
+ // mounts the career-bin proxies. The later vault construction uses those
+ // proxies, including their extra WorldRaces links. Reserve that same count
+ // in the early sizing pass; otherwise every subsequent pooled object's
+ // reference pointer can extend beyond the native allocation. A mounted
+ // proxy already includes the links, so it must never receive them twice.
+ if(!Find(key)){
+  auto database=*reinterpret_cast<void**>(0x90DCBC);
+  auto klass=database?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x455BC0)(database,0x5CEA9D46):nullptr;
+  auto source=klass?getCollection(klass,key):nullptr;
+  if(source){
+   auto races=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x454190)(source,Hash("WorldRaces"),0);
+   auto indexData=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x454190)(source,Hash("BinIndex"),0);
+   unsigned index=~0u;
+   if(races&&indexData&&Copy(indexData,&index,4))
+    for(const auto& package:packages)if(!mwel::Correction(package.authoring)&&!mwel_rpd::CaseFile(package.authoring)&&package.authoring.at("blacklistNo").get<unsigned>()==index)++reserve;
+  }
+ }
+ if(reserve)Log("EVENT_CAREER_REFERENCE_RESERVE key=%08X native=%u additional=%u total=%u before_bin_mount=1",key,native,reserve,native+reserve);
+ if(worldLogEnabled)if(auto clone=Find(key);clone&&clone->bin)Log("EVENT_CAREER_REFERENCE_MOUNTED key=%08X total=%u additional_already_included=1",key,native);
+ return native+reserve;
+}
 bool Install(){
  const struct Hook {unsigned address;void* replacement;void** original;const char* guard;unsigned length;} hooks[]={
   {0x455960,GetCollection,reinterpret_cast<void**>(&getCollection),"\x8B\x44\x24\x04\x56\x8B\x71\x08",8},
@@ -902,6 +964,7 @@ bool Install(){
   {0x456B00,FirstCollection,reinterpret_cast<void**>(&firstCollection),"\x8B\x41\x08\x83\xC0\x1C",6},
   {0x456B20,NextCollection,reinterpret_cast<void**>(&nextCollection),"\x8B\x49\x08\x8B\x44\x24\x04",7},
   {0x453FC0,CountCollections,reinterpret_cast<void**>(&countCollections),"\x8B\x41\x08\x8B\x40\x24\xC3",7}
+  ,{0x5E5330,NumReferences,reinterpret_cast<void**>(&originalNumReferences),"\x6A\xFF\x68\xE0\x51\x87\x00",7}
   ,{0x5E3EC0,FindVault,reinterpret_cast<void**>(&findVault),"\x83\xEC\x10\x8B\x51\x20",6}
   ,{0x5E2D70,ScopeContains,reinterpret_cast<void**>(&originalScopeContains),"\x64\xA1\x00\x00\x00\x00",6}
   ,{0x45A220,SetParent,reinterpret_cast<void**>(&originalSetParent),"\x57\x8B\xF9\x8B\x47\x10",6}

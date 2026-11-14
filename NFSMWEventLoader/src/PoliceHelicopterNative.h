@@ -8,6 +8,7 @@ void* heliFlightTrampoline=nullptr;
 void* heliActionEnterTrampoline=nullptr;
 void* heliActionUpdateTrampoline=nullptr;
 void* heliActionSideTrampoline=nullptr;
+void* heliFuelTrampoline=nullptr;void* heliDiveTrampoline=nullptr;
 std::atomic<unsigned long long> helicopterLeader{};
 std::atomic<unsigned> helicopterRace{},helicopterParams{},helicopterObject{};
 std::atomic<unsigned long long> helicopterInstance{};
@@ -166,10 +167,19 @@ __declspec(naked) void HelicopterActionSidePlayer(){__asm {
 bool HelicopterNativeSurface(){
  BYTE code[6]{};const BYTE think[]={0xA1,0x84,0xD8,0x92,0},flight[]={0xA1,0x84,0xD8,0x92,0};
  const BYTE playerCall[]={0x8B,0x11,0xFF,0x52,0x04};
- return (heliActionEnterTrampoline||(Copy(reinterpret_cast<void*>(0x42778A),code,5)&&!memcmp(code,playerCall,5)))&&
+ return (heliFuelTrampoline||(Copy(reinterpret_cast<void*>(0x42AD73),code,5)&&!memcmp(code,playerCall,5)))&&
+  (heliDiveTrampoline||(Copy(reinterpret_cast<void*>(0x427A17),code,5)&&!memcmp(code,playerCall,5)))&&
+  (heliActionEnterTrampoline||(Copy(reinterpret_cast<void*>(0x42778A),code,5)&&!memcmp(code,playerCall,5)))&&
   (heliActionUpdateTrampoline||(Copy(reinterpret_cast<void*>(0x42781C),code,5)&&!memcmp(code,playerCall,5)))&&
   (heliActionSideTrampoline||(Copy(reinterpret_cast<void*>(0x42791D),code,5)&&!memcmp(code,playerCall,5)))&&
   (heliThinkTrampoline||(Copy(reinterpret_cast<void*>(0x42ADC2),code,5)&&!memcmp(code,think,5)))&&
   (heliFlightTrampoline||(Copy(reinterpret_cast<void*>(0x42AEF4),code,5)&&!memcmp(code,flight,5)));
 }
+// Fuel initialization reads the perpetrator's pursuit attributes at 0042AD7C;
+// using the officer here can initialize an immediately exhausted flight. The
+// dive action separately constructs its destination from IPlayer at 00427A1C.
+#define RPD_HELI_CALL(Name,Original,Resume) __declspec(naked) void Name(){__asm{pushfd} __asm{pushad} __asm{mov ebp,esp} __asm{sub esp,528} __asm{and esp,0FFFFFFF0h} __asm{fxsave [esp]} __asm{call HelicopterLeaderSim} __asm{test eax,eax} __asm{jz nativeRead} __asm{mov [ebp+28],eax} __asm{fxrstor [esp]} __asm{mov esp,ebp} __asm{popad} __asm{popfd} __asm{push Resume} __asm{ret} __asm{nativeRead:} __asm{fxrstor [esp]} __asm{mov esp,ebp} __asm{popad} __asm{popfd} __asm{jmp dword ptr [Original]}}
+RPD_HELI_CALL(HelicopterFuelPlayer,heliFuelTrampoline,0x42AD78)
+RPD_HELI_CALL(HelicopterDivePlayer,heliDiveTrampoline,0x427A1C)
+#undef RPD_HELI_CALL
 }

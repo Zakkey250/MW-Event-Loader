@@ -1,3 +1,4 @@
+#include "WorldProviderModule.h"
 #include "EventCore.h"
 #include "../../World2MW/src/NativeLoader/CollisionWorld.h"
 #include "../../integration/MWEventGeometryApi.h"
@@ -19,7 +20,7 @@ bool groupScope=false;
 bool Snapshot(){__try{memcpy(groupFlags.data(),reinterpret_cast<void*>(0x902160),groupFlags.size());return true;}__except(EXCEPTION_EXECUTE_HANDLER){groupFlags.fill(0);return false;}}
 bool Enabled(const void*,unsigned index){return index<groups.size()&&mwel_native_groups::Enabled(groups[index],groupFlags);}
 bool W2CActive(){
- auto module=GetModuleHandleW(L"World2MWNativeLoader.asi");
+ auto module=mwel_world_provider::Module();
  auto query=module?reinterpret_cast<unsigned(__cdecl*)(mwelgeo::Api*,unsigned)>(GetProcAddress(module,"W2MW_GeometryApiV1")):nullptr;
  mwelgeo::Api api{};
  return query&&query(&api,sizeof(api))&&api.size==sizeof(api)&&api.version==mwelgeo::Version&&api.worldKind==mwelgeo::W2CWorld&&api.available&&api.available();

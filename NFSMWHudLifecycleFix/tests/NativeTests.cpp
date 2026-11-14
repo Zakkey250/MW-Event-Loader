@@ -29,6 +29,9 @@ int main(){
     point[1]=3;Check(!combat_hud::Project(point,matrix,viewport,x,y,z),"leader marker rejects outside depth range");
     combat_hud::Vertex star[60];unsigned starCount=0;combat_hud::StarVertices(star,starCount,960,540,16,.5f,0xffffd44d);
     Check(starCount==30,"five-point leader star has bounded triangle fan");
+    combat_hud::Vertex triangle[3];unsigned triangleCount=0;combat_hud::TriangleVertices(triangle,triangleCount,960,540,12,.5f,0xffff3636);
+    Check(triangleCount==3&&triangle[2].y>triangle[0].y&&triangle[2].y>triangle[1].y,"racer triangle points down toward health bar");
+    for(const auto& vertex:triangle)Check(vertex.color==0xffff3636&&vertex.z==.5f&&std::isfinite(vertex.x)&&std::isfinite(vertex.y),"racer marker preserves red color and finite world depth");
     for(unsigned i=0;i<starCount;++i)Check(std::isfinite(star[i].x)&&std::isfinite(star[i].y)&&star[i].z==.5f,"leader marker preserves finite screen coordinates and world depth");
     combat_hud::count=1;combat_hud::sampledAt=GetTickCount()-501;Check(!combat_hud::Active(),"stale health samples disappear");
     combat_hud::count=0;combat_hud::sampledAt=GetTickCount();Check(!combat_hud::Active(),"empty health event disappears");

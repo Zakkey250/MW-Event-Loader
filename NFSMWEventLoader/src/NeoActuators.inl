@@ -87,12 +87,13 @@ using NeoPlaceFn=bool(__thiscall*)(void*,float*,float*);
 static NeoPlaceFn neoOriginalPlacement=nullptr;
 static thread_local const float* neoPlacementPoint=nullptr;
 bool MWELNeoPlaceVehicle(void* ai,float* position,float* heading){
- if(!neoOriginalPlacement)return false;
+ if(!neoOriginalPlacement||!MWELRpdNativePlacementAllowed(ai))return false;
  const auto prior=neoPlacementPoint;bool result=false;neoPlacementPoint=position;
  __try{result=neoOriginalPlacement(ai,position,heading);}__finally{neoPlacementPoint=prior;}
  return result;
 }
 static bool __fastcall NeoNativePlacement(void* ai,void*,float* position,float* heading){
+ if(!MWELRpdNativePlacementAllowed(ai))return true;
  if(neoInstalled&&MWELNeoCourseEnabled())if(auto* row=NeoOwned(ai)){
   // WRoadNav can refer to an earlier or opposite-direction road. The owned
   // planner validates its own grounded placement without changing CP/laps.
@@ -109,6 +110,10 @@ static NeoPhysicsModeFn neoOriginalPhysicsMode=nullptr;
 // only for the controller we currently own; staging, retirement, police,
 // traffic and native/NFRR drivers keep every original mode transition.
 static void __fastcall NeoPhysicsMode(void* vehicle,void*,int mode){
+ if(mode==2&&neoInstalled&&BattleVtable(vehicle,0x8AA828)){
+  unsigned handle=0;AudioRead(static_cast<unsigned char*>(vehicle)-0x78,&handle);
+  if(MWELRpdFreeRunVehicle()==vehicle||MWELRpdSprintLocked(handle))mode=1;
+ }
  if(mode==2&&neoInstalled&&MWELNeoCourseEnabled()&&BattleVtable(vehicle,0x8AA828)){
   void* ai=nullptr;
   if(AudioRead(static_cast<unsigned char*>(vehicle)+0x54,&ai)&&NeoOwned(ai)){
@@ -184,6 +189,7 @@ static bool NeoRoadBlocked(void* nav){
  void* primary=nullptr;return nav&&AudioRead(static_cast<unsigned char*>(nav)+0x84,&primary)&&BattleVtable(primary,kRacecarPrimaryVtable)&&NeoOwned(static_cast<unsigned char*>(primary)+0x4C);
 }
 static void NeoInputDispatch(unsigned channel,void* input,float value,std::uintptr_t caller){
+ MWELRpdObserveInput(input,channel,value,unsigned(caller));
  NeoDiagnosticWriter(input,channel,value,caller);
  if(neoWriter!=GetCurrentThreadId())for(auto& row:neoRuntime)if(row.owned&&row.input==input&&GetTickCount64()-row.activeAt<250){
   ++row.rejectedNative;return;
@@ -195,6 +201,7 @@ static void __fastcall NeoGas(void* p,void*,float v){NeoInputDispatch(1,p,v,rein
 static void __fastcall NeoBrake(void* p,void*,float v){NeoInputDispatch(2,p,v,reinterpret_cast<std::uintptr_t>(_ReturnAddress()));}
 static void __fastcall NeoHandBrake(void* p,void*,float v){NeoInputDispatch(3,p,v,reinterpret_cast<std::uintptr_t>(_ReturnAddress()));}
 static void __fastcall NeoNOS(void* input,void*,bool pressed){
+ if(!MWELRpdNOSWrite(input,pressed,unsigned(_ReturnAddress())))return;
  if(neoWriter!=GetCurrentThreadId())for(auto& row:neoRuntime)if(row.owned&&row.input==input&&GetTickCount64()-row.activeAt<250)return;
  neoOriginalNOS(input,pressed);
 }
@@ -220,6 +227,7 @@ static bool NeoReadNitrous(void* primary,bool& equipped,float& tank,bool& engage
  return std::isfinite(tank)&&tank>=0&&tank<=1.01f&&std::isfinite(boost);
 }
 static bool NeoDrive(void* primary,float dt){
+ if(MWELRpdRetiredDriving(primary))return true;
  if(!neoInstalled||NeoSelectedController()!=2||!MWELNeoCourseEnabled())return false;
  auto* ai=static_cast<unsigned char*>(primary)+0x4C;VehicleSnapshot racer{},player{};
  if(MWELNeoDetailedLoggingEnabled()) {static ULONGLONG next=0;auto t=GetTickCount64();if(t>=next){next=t+1000;Log(LogLevel::Info,"DRIFT_ENTRY primary=%08X local=%u mode=%u",unsigned(primary),unsigned(NeoLocalPlayer()),MWELNeoDriftMode());}}
@@ -279,6 +287,12 @@ static bool NeoDrive(void* primary,float dt){
  const float previousSimulation=row.simulationStep.previous;
  if(!row.simulationStep.Begin(simulation))return row.owned;
  if(previousSimulation>=0&&simulation>previousSimulation)v.dt=std::min(.1f,simulation-previousSimulation);
+ if(MWELRpdSprintLocked(handle)){
+  row.owned=true;row.activeAt=now;row.controls={};row.controls.brake=1.f;row.controls.valid=true;
+  neoWriter=GetCurrentThreadId();neoOriginalInput[0](input,0);neoOriginalInput[1](input,0);neoOriginalInput[2](input,1.f);neoOriginalInput[3](input,0);
+  if(neoNitrousInstalled)neoOriginalNOS(input,false);row.nitrous.pressed=false;neoWriter=0;
+  return true;
+ }
  if(MWELNeoHoldingAtGenuineGoal(handle)){
   const bool motionReady=row.driftMotionReady;
   const auto priorHeading=row.driftMotionHeading,priorTravel=row.driftMotionTravel;
@@ -376,7 +390,8 @@ static bool NeoDrive(void* primary,float dt){
  row.owned=true;row.activeAt=now;
  if(!row.difficultySampled||now-row.difficultySampled>=50){
   row.difficultyRace={};MWELNeoDifficultySample(handle,row.difficultyRace);
-  row.powerScale=mwel_difficulty::Multiplier(neoDifficulty,row.difficultyRace);row.difficultySampled=now;
+  row.powerScale=racer.driverClass==3&&MWELRpdPoliceSprint()?1.f:mwel_difficulty::Multiplier(neoDifficulty,row.difficultyRace);
+  row.difficultySampled=now;
  }
  mwneo::Profile profile;using GetProfile=unsigned(__cdecl*)(mwneo::Profile*,unsigned);bool ownedProvider=false;auto module=NeoProviderModule(ownedProvider);
  static GetProfile getProfile=nullptr;if(!getProfile&&module)getProfile=reinterpret_cast<GetProfile>(GetProcAddress(module,"MWEL_NeoProfileV1"));if(module&&getProfile)getProfile(&profile,sizeof(profile));
@@ -467,7 +482,9 @@ static bool NeoDrive(void* primary,float dt){
   v.dt,row.controls.throttle,measuredBeta,row.driftTravelRate-row.driftBodyRate);
  const bool nativePowerTrimmed=row.controls.throttle<beforePowerTrim;
  if(!row.controls.valid){row.controls={};row.controls.brake=.4f;++row.guidanceFailures;}
- if(!diagnostic&&row.jam.Update(v,row.guidance,row.driver.recovery,nativeTurnInput&&driftMode==2)){
+ if(MWELRpdSprintRecoveryHeld(handle))row.jam.Reset();
+ else if(!diagnostic&&row.jam.Update(v,row.guidance,row.driver.recovery,nativeTurnInput&&driftMode==2)&&
+    (!MWELRpdRaceMode()||(row.jam.age>=5.f&&NeoRpdRecoverySlot(race,now)))){
   using Recover=unsigned(__cdecl*)(const mwneo::Vehicle*,void*);
   auto recover=module?reinterpret_cast<Recover>(GetProcAddress(module,"MWEL_NeoRecoverV1")):nullptr;
   unsigned result=recover?recover(&v,ai):0;float age=row.jam.age;row.jam.Attempted();
@@ -633,7 +650,7 @@ static void NeoResumeAfterNativeAction(void* primary,float dt){
   if(row&&row->ticks%120==1)Log(LogLevel::Info,"EVENT_NEOAI_ACTION_RESUMED handle=%u simulation_tick=1 native_driving_call_missing=1 CP_lap_writes=0",row->handle);
  }
 }
-static void __fastcall NeoDriving(void* primary,void*,float dt){if(neoUpdatingPrimary==primary)neoUpdateDrove=true;neoDrivingCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());if(!NeoDriveGuarded(primary,dt))neoOriginalDriving(primary,dt);}
+static void __fastcall NeoDriving(void* primary,void*,float dt){if(MWELRpdManualDriving(primary))return;if(neoUpdatingPrimary==primary)neoUpdateDrove=true;neoDrivingCaller=reinterpret_cast<std::uintptr_t>(_ReturnAddress());if(!NeoDriveGuarded(primary,dt))neoOriginalDriving(primary,dt);}
 static unsigned __cdecl NeoWrongWayObserved(void* human,unsigned native){
  if(!neoInstalled||!MWELNeoCourseEnabled()||!BattleVtable(human,0x89293C))return native&255;
  // EN1.3 constructors/destructors install IHumanAI at +7CC (the bundled

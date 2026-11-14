@@ -184,7 +184,6 @@ static void NeoPrepareDriftShape(NeoProviderState& state,int leg){
 static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  if(!neoSettings.enabled||neoSettings.controller!=2||editorStock||!EventGeometryAvailable()||!mwneo::Finite(v.position)||!mwneo::Finite(v.heading))return 0;
  const bool diagnosticTiming=MWELNeoDetailedLoggingEnabled();double queryStart=diagnosticTiming?Clock():0;
- RenderQueryTimer frameQuery;
  NeoPhaseTrace phaseTrace;phaseTrace.previous=renderWorkProfiling?queryStart:0;collision.profileEnabled=renderWorkProfiling;const auto geometryBefore=collision.profile;
  CollisionWorld::RayQueryScope geometryCache(collision);
  YellowTraversableStepScope stepPolicy;
@@ -248,6 +247,7 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  }
  const auto& committed=NeoCommittedRoad(state,leg);const auto& road=committed.points;if(road.size()<2)return 0;
  NeoPrepareDriftShape(state,leg);
+ const bool firstObservation=!state.observedAt;
  const float observedElapsed=state.observedAt&&now>=state.observedAt?float(now-state.observedAt)*.001f:0;
  const float observedMoved=state.observedAt?mwneo::Distance(v.position,state.observedPosition):0;
  if(state.observedAt&&now-state.observedAt<500){
@@ -298,6 +298,22 @@ static unsigned NeoGuidance(const mwneo::Vehicle& v,mwneo::Guidance& g){
  if(state.launch.length&&!gridApproach){DiscardPlan(slot,state);state.launch={};state.launchSurface.clear();state.line={};state.grounded.clear();state.through.clear();state.planned=0;}
  g={};g.status=1;g.event=hash;g.lap=lap;g.edge=leg;g.confidence=1;
  float error=0;bool projected=gridApproach||NeoProject(road,v,state.station,state.station,error);
+ // A rolling grid can hand over a live suspect beyond the ordinary initial
+ // 40 m search. Seed only its first CP cursor and only on the same supported
+ // road, aligned with the actual car. Steering still checks authored walls
+ // in the planner below. The native grid and CPs stay untouched.
+ if(!projected&&firstObservation&&leg==0&&lap==0&&MWEL_RpdAIScopeV1(v.handle)==rpd_ai_contract::NeoSprint){
+  constexpr float rollingGridSearch=120.f;
+  const Vec3 body{v.position.x,v.position.y,v.position.z};
+  float station=0;Vec3 point{},ahead{};
+  if(NeoProjectSupportedRoad(collision,road,body,0,station,rollingGridSearch,&road,rollingGridSearch)&&
+     YellowLineSample(road,station,point)&&YellowLineSample(road,std::min(road.back().station,station+4.f),ahead)&&
+     mwneo::DotXZ(mwneo::UnitXZ(v.heading),mwneo::UnitXZ({ahead.x-point.x,0,ahead.z-point.z}))>.5f&&
+     (std::hypot(body.x-point.x,body.z-point.z)<.25f||YellowWallCorridor(collision,body,point,.25f))){
+   state.station=station;error=std::hypot(body.x-point.x,body.z-point.z);projected=true;
+   Log("RPD_NEOAI_ROLLING_GRID handle=%u station=%.3f same_deck=1 native_CP_writes=0 pose_writes=0",v.handle,station);
+  }
+ }
  // Wide drivable lanes can be farther than the authored progress corridor.
  // Track the already checked, fresh same-leg line only when the actual body
  // is within 3 m of it, on the same floor, with no intervening wall. Merely

@@ -79,7 +79,7 @@ unsigned ChaseCount(unsigned pursuit){
  unsigned chasers=0;
  for(unsigned i=0;i<count;++i){unsigned car=0,driver=0,ai=0;
   if(Read(data+i*4,car)&&Table(car,0x8AA828)&&Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&
-     !Roadblock(car,ai)&&reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688200)(car)&&
+     (MWELRpdHotPursuitScope()||!Roadblock(car,ai))&&reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688200)(car)&&
      (!MWELHotPursuitActive()||!reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688170)(car)))++chasers;
  }return chasers;
 }
@@ -110,7 +110,7 @@ unsigned PendingDeployment(unsigned manager){
  unsigned head=0,node=0;if(!Read(manager+0x18,head)||!Read(head,node))return 64;
  unsigned count=0;
  for(unsigned n=0;node!=head;++n){BYTE block=0;if(!node||n>=128||!Read(node+8+57,block))return 64;
-  if(!block)++count;if(!Read(node,node))return 64;
+  if(!block||MWELRpdHotPursuitScope())++count;if(!Read(node,node))return 64;
  }return count;
 }
 unsigned DeploymentLimit(){return MWELHotPursuitActive()?MWELHotPursuitBudget():4u;}
@@ -131,14 +131,18 @@ bool __fastcall Acquire(unsigned manager,void*,unsigned pursuit){
   unsigned player=0,activity=0;Read(0x993CC8,player);Read(player+0x130,activity);
   const auto limit=MWELHotPursuitActive()?MWELHotPursuitBudget():ChaseLimit;
   ApplyDeployment(manager+0x54,limit);
-  if((Duel()&&handoffPending)||!police_deployment::Room(limit,ChaseCount(activity),PendingDeployment(manager+0x54))||!MWELHotPursuitAcquire(pursuit))return false;
+  const auto chasers=ChaseCount(activity),pending=PendingDeployment(manager+0x54);const bool allowed=MWELHotPursuitAcquire(pursuit);
+  if(worldLogEnabled){const auto p=event_race_policies::Current();if(p&&mwel::RpdStartOnly(p->authoring))Log("RPD_NATIVE_COP_ACQUIRE limit=%u chasers=%u pending=%u allowed=%u pursuit=%08X",limit,chasers,pending,unsigned(allowed),pursuit);}
+  if((Duel()&&handoffPending)||!police_deployment::Room(limit,chasers,pending)||!allowed)return false;
  }
  const bool acquired=originalAcquire(manager,pursuit);
+ if(worldLogEnabled){const auto p=event_race_policies::Current();if(p&&mwel::RpdStartOnly(p->authoring))Log("RPD_NATIVE_COP_ACQUIRE_RESULT acquired=%u",unsigned(acquired));}
  if(acquired&&(Duel()||MWELHotPursuitActive())){
   // AcquireCop activates pooled cars without using SpawnCop. Reject SUVs
   // after native ownership/count insertion, then release with full bookkeeping.
   std::vector<unsigned> cars;if(List(cars))for(auto car:cars){unsigned ai=0,driver=0;
-   if(Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&!Roadblock(car,ai)&&SUV(car)){
+   if(Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&!Roadblock(car,ai)&&SUV(car)&&
+      !MWELRpdFleetAllowsVehicle(reinterpret_cast<NFSPluginSDK::MW05::IVehicle*>(car)->GetVehicleKey())){
     if(ReleaseChaser(car))Log("GAUNTLET_SUV_EXCLUDED handle=%u pooled_acquire=1 native_count_restored=1",Handle(car));
    }
   }
@@ -186,8 +190,12 @@ void __declspec(naked) PatrolRecycle(){
  }
 }
 void __fastcall Spawn(unsigned manager,void*,const combat_impact::Vector* position,const combat_impact::Vector* forward,const char* model,bool pursuit,bool roadblock){
+ if(worldLogEnabled){const auto p=event_race_policies::Current();if(p&&mwel::RpdStartOnly(p->authoring))Log("RPD_NATIVE_DISPATCH model=%s pursuit=%u roadblock=%u",model?model:"",unsigned(pursuit),unsigned(roadblock));}
  if(MWELHotPursuitActive()&&!roadblock&&!MWELHotPursuitSpawnAllowed(pursuit))return;
- if((Duel()||MWELHotPursuitActive())&&pursuit&&!roadblock&&model){char name[64]{};if(Copy(model,name,sizeof(name))&&memchr(name,0,sizeof(name))&&gauntlet_vehicle::SUV(name))return;}
+ model=MWELRpdFleetSpawnModel(model);
+ if((Duel()||MWELHotPursuitActive())&&pursuit&&!roadblock&&model){char name[64]{};if(Copy(model,name,sizeof(name))&&memchr(name,0,sizeof(name))&&gauntlet_vehicle::SUV(name)){
+  const auto source=rpd_vehicle_catalog::Hash(name);if(!MWELRpdFleetAllowsVehicle(source))return;
+ }}
  if((Duel()||MWELHotPursuitActive())&&!roadblock&&!replacementSpawn){
   unsigned player=0,activity=0;Read(0x993CC8,player);Read(player+0x130,activity);
   const auto limit=MWELHotPursuitActive()?MWELHotPursuitBudget():ChaseLimit;
@@ -203,7 +211,7 @@ bool __fastcall QueuedSpawn(unsigned manager,void*,unsigned request){
  if(scoped){
   if(!Read(request+57,roadblock))return false;
   ApplyDeployment(manager+0x54,DeploymentLimit());
-  if(!roadblock&&ChaseCount(0)>=DeploymentLimit())return false;
+  if((!roadblock||MWELRpdHotPursuitScope())&&ChaseCount(0)>=DeploymentLimit())return false;
  }
  bool result=false;
  __try {result=originalQueuedSpawn(manager,request);}
@@ -211,11 +219,14 @@ bool __fastcall QueuedSpawn(unsigned manager,void*,unsigned request){
  return result;
 }
 bool __fastcall PatrolSpawn(unsigned manager,void*){
+ if(MWELHotPursuitActive()&&!MWELHotPursuitAmbientPatrolAllowed())return false;
  if(Duel()||MWELHotPursuitActive()){
   ApplyDeployment(manager+0x54,DeploymentLimit());
   if(!police_deployment::Room(DeploymentLimit(),ChaseCount(0),PendingDeployment(manager+0x54)))return false;
  }
- return originalPatrolSpawn(manager);
+ const bool spawned=originalPatrolSpawn(manager);
+ if(spawned&&MWELHotPursuitActive())MWELHotPursuitPatrolSpawned();
+ return spawned;
 }
 bool Install(){
  if(originalAcquire&&originalQueuedSpawn&&originalPatrolSpawn)return true;if(!Surface()||!MWELInstallGauntletPower()||!MWELInstallGauntletPursuit())return false;
@@ -271,6 +282,12 @@ bool Boost(unsigned vehicle,float* output){
 }
 int Heat(unsigned player){
  const auto package=event_race_policies::Current();auto setting=package->authoring.find("startHeatLevel");float wanted=1;
+ if(mwel_rpd::Armed(package->authoring)){
+  if(const auto heat=MWELRpdAuthoredHeat(package->authoring))return int(heat);
+  if(player){const auto current=MWELRpdVehicleHeat(reinterpret_cast<NFSPluginSDK::MW05::IVehicle*>(player)->GetVehicleKey());if(current>=1&&current<=10)return int(current);}
+  const auto tier=MWELRpdPresetHeat(package->authoring.value("policeVehicle",std::string()));
+  if(tier>=1&&tier<=10)return int(tier);
+ }
  if(setting!=package->authoring.end()&&setting->is_number())wanted=setting->get<float>();
  else {unsigned com=0,perp=0,fn=0;
   if(Read(player-0x80+4,com)&&com){perp=reinterpret_cast<unsigned(__thiscall*)(unsigned,unsigned)>(0x5D59F0)(com,0x4037E0);

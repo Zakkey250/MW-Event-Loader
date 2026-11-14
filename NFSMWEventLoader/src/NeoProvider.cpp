@@ -4,6 +4,7 @@
 #include <set>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <cstdio>
 #include <cstdarg>
@@ -21,12 +22,15 @@
 #include "NeoSnapshotGeometryApi.h"
 #include "GridLaunchPolicy.h"
 #include "GridSupport.h"
+#include "../../integration/RpdAIContract.h"
 #include "../../World2MW/src/NeoAI/RouteGraph.h"
 #include "../../World2MW/src/NeoAI/RespawnHistory.h"
 #include "../../World2MW/src/NeoAI/RecoveryAnchor.h"
 #include "../../World2MW/src/NeoAI/BlockedGuidance.h"
 extern "C" unsigned __cdecl MWEL_LocalRaceTestV1();
+extern "C" unsigned __cdecl MWEL_RpdAIScopeV1(unsigned handle);
 bool MWELNeoDetailedLoggingEnabled();
+bool MWELRpdSprintRecoveryHeld(unsigned handle);
 namespace event_neo_provider {
 using w2mw::Vec3;
 using CollisionWorld=event_geometry::WorldQueries;
@@ -42,7 +46,6 @@ static float SimulationSeconds(){
 }
 static void Log(const char* format,...){if(!MWELNeoDetailedLoggingEnabled())return;char text[8192];va_list args;va_start(args,format);vsnprintf_s(text,sizeof(text),_TRUNCATE,format,args);va_end(args);MWELNeoLog(text);}
 #define Log(...) do { if(MWELNeoDetailedLoggingEnabled()) (Log)(__VA_ARGS__); } while(false)
-struct RenderQueryTimer {};
 struct NeoPhaseTrace {double previous=0;std::array<double,8> ms{};void Mark(unsigned phase){if(previous){double now=Clock();ms[phase]+=now-previous;previous=now;}}};
 struct NeoSettings {unsigned controller=2;bool enabled=true,testMode=false,autoStart=false,telemetry=false,asyncPlanning=true;mwneo::Profile profile{};};
 static NeoSettings neoSettings;
@@ -101,6 +104,65 @@ int MWELNeoDiagnosticWheelCount(void* vehicle,const MWELNeoFrameState& state){
 #endif
 void MWELResetNeoProviderRace(){using namespace event_neo_provider;++planRaceGeneration;if(planWorker)planWorker->Invalidate();for(auto& state:neoProviders)state={};for(auto& flight:neoFlightStates){flight.positionWatch.Invalidate();flight={};}neoRejectedBranches.clear();}
 bool MWELPrepareNeoCourse(unsigned key){return key&&event_neo_provider::NeoLoadCourse(key);}
+bool MWELPlayerResetCourseReady(unsigned key){using namespace event_neo_provider;return key&&neoCourse.hash==key&&yellowRecoveryHash==key&&!yellowRecoveryLegs.empty()&&!collision.nodes.empty();}
+bool MWELPlayerResetPose(unsigned key,unsigned leg,unsigned vehicle,float* position,float* heading){
+ using namespace event_neo_provider;
+ if(!position||!heading||!key||yellowRecoveryHash!=key||leg>=yellowRecoveryLegs.size()||collision.nodes.empty())return false;
+ NeoBodyMotion body{};if(!NeoReadBody(reinterpret_cast<BYTE*>(vehicle),body))return false;
+ mwneo::Vehicle own;own.position={body.position[0],body.position[1],body.position[2]};
+ own.halfWidth=body.halfWidth;own.halfLength=body.halfLength;
+ struct Projection {unsigned leg;float station,score;};std::vector<Projection> projections;
+ for(unsigned l=leg?leg-1:leg;l<=leg;++l){
+  const auto& road=yellowRecoveryLegs[l];if(road.size()<2)continue;
+  float best=std::numeric_limits<float>::infinity(),station=0;
+  for(unsigned i=1;i<road.size();++i){
+   const auto& a=road[i-1];const auto& b=road[i];
+   const float dx=b.p[0]-a.p[0],dy=b.p[1]-a.p[1],dz=b.p[2]-a.p[2],n=dx*dx+dy*dy+dz*dz;if(n<.001f)continue;
+   const float x=body.position[0]-a.p[0],y=body.position[1]-a.p[1],z=body.position[2]-a.p[2];
+   const float t=std::clamp((x*dx+y*dy+z*dz)/n,0.f,1.f);
+   const float s=a.station+t*(b.station-a.station);
+   if(l!=leg&&s<road.back().station-25.f)continue; // Only a pending gate's approach.
+   const float score=(x-t*dx)*(x-t*dx)+(z-t*dz)*(z-t*dz)+4*(y-t*dy)*(y-t*dy);
+   if(score<best){best=score;station=s;}
+  }
+  if(std::isfinite(best))projections.push_back({l,station,best});
+ }
+ std::sort(projections.begin(),projections.end(),[](const auto& a,const auto& b){return a.score<b.score;});
+ if(!LoadWalls(key))return false;
+ CollisionWorld::RayQueryScope queries(collision);
+ for(const auto& projection:projections){
+  const auto& road=yellowRecoveryLegs[projection.leg];
+  for(float back:{0.f,5.f,10.f,20.f,40.f,80.f}){
+   const float station=std::max(road.front().station,projection.station-back);
+   if(projection.leg!=leg&&station<road.back().station-25.f)continue;
+   Vec3 center{},a{},b{};
+   if(!YellowLineSample(road,station,center)||!YellowLineSample(road,std::max(road.front().station,station-1.f),a)||
+      !YellowLineSample(road,std::min(road.back().station,station+1.f),b))continue;
+   const auto forward=mwneo::UnitXZ({b.x-a.x,0,b.z-a.z});if(mwneo::LengthXZ(forward)<.9f)continue;
+   BeginYellowBarrierQuery(center,key);
+   for(float offset:{0.f,2.f,-2.f}){
+    Vec3 proposed{center.x-forward.z*offset,center.y,center.z+forward.x*offset},surface;
+    if(!YellowAimGround(collision,proposed,center.y,.75f,surface)||!NeoRespawnDistanceAllowed(own.position,surface)||
+       !NeoRespawnPoseClear(collision,own,surface,forward))continue;
+    auto list=*reinterpret_cast<BYTE***>(0x92CD1C);const auto count=*reinterpret_cast<unsigned*>(0x92CD24);
+    if(!list||count>128)return false;bool occupied=false;
+    for(unsigned i=0;i<count;++i){
+     if(unsigned(list[i])==vehicle)continue;NeoBodyMotion other{};if(!NeoReadBody(list[i],other)||std::abs(other.position[1]-surface.y)>3.f)continue;
+     const float extent=std::max(0.f,other.halfLength-other.halfWidth);
+     if(YellowSegmentDistance(surface.x-forward.x*own.halfLength,surface.z-forward.z*own.halfLength,
+        surface.x+forward.x*own.halfLength,surface.z+forward.z*own.halfLength,
+        other.position[0]-other.heading[0]*extent,other.position[2]-other.heading[2]*extent,
+        other.position[0]+other.heading[0]*extent,other.position[2]+other.heading[2]*extent)<own.halfWidth+other.halfWidth+.7f){occupied=true;break;}
+    }
+    if(occupied)continue;
+    position[0]=surface.x;position[1]=surface.y+2.f;position[2]=surface.z;
+    heading[0]=forward.x;heading[1]=0;heading[2]=forward.z;
+    return true;
+   }
+  }
+ }
+ return false;
+}
 bool MWELFitGrid(unsigned key,unsigned count,const mwel_grid::Position& origin,float rotation,mwel_grid::Layout& layout){
  using namespace event_neo_provider;layout={};if(!key||collision.nodes.empty()){Log("EVENT_EXTENDED_GRID_REFUSED key=%08X requested=%u reason=world_geometry_unavailable flow=%u",key,count,*reinterpret_cast<unsigned*>(0x925E90));return false;}
  // The registered package key, not the previous GRaceStatus, owns this
@@ -229,6 +291,31 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_NeoControllerV1(){return 
 namespace event_gauntlet_road {
 struct Point {float p[3]{};};
 unsigned hash=0;std::vector<std::vector<Point>> legs;
+}
+bool MWELCourseProjection(unsigned key,const float* position,unsigned leg,float& station,float& distance){
+ using namespace event_gauntlet_road;
+ if(!key||key!=hash||!position||(!std::isfinite(position[0])||!std::isfinite(position[1])||!std::isfinite(position[2])))return false;
+ if(leg!=~0u&&leg>=legs.size())return false;
+ float traversed=0,best=std::numeric_limits<float>::infinity();
+ for(unsigned l=0;l<legs.size();++l){
+  const auto& road=legs[l];
+  for(unsigned i=1;i<road.size();++i){
+   const auto& a=road[i-1];const auto& b=road[i];
+   const float dx=b.p[0]-a.p[0],dy=b.p[1]-a.p[1],dz=b.p[2]-a.p[2];
+   const float length=std::sqrt(dx*dx+dy*dy+dz*dz);
+   if(length<.01f)continue;
+   if(leg==~0u||leg==l){
+    const float x=position[0]-a.p[0],y=position[1]-a.p[1],z=position[2]-a.p[2];
+    const float t=std::clamp((x*dx+y*dy+z*dz)/(length*length),0.f,1.f);
+    const float horizontal=std::hypot(x-t*dx,z-t*dz),height=std::abs(y-t*dy);
+    const float score=horizontal*horizontal+4*height*height;
+    if(height<=6.f&&score<best){best=score;station=traversed+t*length;distance=horizontal;}
+   }
+   traversed+=length;
+  }
+  if(l==leg)break;
+ }
+ return std::isfinite(best);
 }
 bool MWELPrepareGauntletRoad(unsigned key){
  using namespace event_gauntlet_road;if(hash==key)return !legs.empty();

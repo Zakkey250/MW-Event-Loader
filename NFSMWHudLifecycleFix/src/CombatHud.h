@@ -40,7 +40,12 @@ void StarVertices(Vertex* vertices,unsigned& used,float x,float y,float radius,f
   vertices[used++]={x,y,depth,1,color};vertices[used++]={x+std::cos(a)*r,y+std::sin(a)*r,depth,1,color};vertices[used++]={x+std::cos(b)*r2,y+std::sin(b)*r2,depth,1,color};
  }
 }
-void LeaderStar(IDirect3DDevice9* device,const float* position,const float* matrix){
+void TriangleVertices(Vertex* vertices,unsigned& used,float x,float y,float radius,float depth,DWORD color){
+ vertices[used++]={x-radius,y-radius,depth,1,color};
+ vertices[used++]={x+radius,y-radius,depth,1,color};
+ vertices[used++]={x,y+radius*.55f,depth,1,color};
+}
+void WorldMarker(IDirect3DDevice9* device,const float* position,const float* matrix,bool racer,float arrest=0,float alpha=0){
  if(!device||!visible||!Active()||FAILED(device->TestCooperativeLevel()))return;
  D3DVIEWPORT9 viewport{};float x=0,y=0,depth=0;
  if(FAILED(device->GetViewport(&viewport))||!Project(position,matrix,viewport,x,y,depth))return;
@@ -57,11 +62,45 @@ void LeaderStar(IDirect3DDevice9* device,const float* position,const float* matr
   device->SetRenderState(D3DRS_ALPHATESTENABLE,FALSE);device->SetRenderState(D3DRS_ALPHABLENDENABLE,TRUE);device->SetRenderState(D3DRS_SRCBLEND,D3DBLEND_SRCALPHA);device->SetRenderState(D3DRS_DESTBLEND,D3DBLEND_INVSRCALPHA);
   device->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE,FALSE);device->SetRenderState(D3DRS_BLENDOP,D3DBLENDOP_ADD);device->SetRenderState(D3DRS_COLORWRITEENABLE,15);device->SetRenderState(D3DRS_SRGBWRITEENABLE,FALSE);
   Vertex vertices[60];unsigned used=0;const float size=std::clamp(viewport.Height/1080.f*14.f,8.f,28.f);
-  StarVertices(vertices,used,x,y,size+2,depth,0xEE121820);StarVertices(vertices,used,x,y,size,depth,0xFFFFD44D);
+  if(racer){
+   if(alpha>0){
+    const float width=size*6.f,height=size*.5f,offset=size*1.35f;
+    const DWORD fade=DWORD(255*std::clamp(alpha,0.f,1.f))<<24;
+    Rect(vertices,used,x-width*.5f-1,y+offset-1,width+2,height+2,fade|0x12090A);
+    Rect(vertices,used,x-width*.5f,y+offset,width,height,fade|0x5B1E23);
+    if(arrest>0)Rect(vertices,used,x-width*.5f,y+offset,width*std::clamp(arrest,0.f,1.f),height,fade|0xF4313E);
+   }
+   y-=size*2.2f;TriangleVertices(vertices,used,x,y,size+2,depth,0xF5090C10);TriangleVertices(vertices,used,x,y,size-1,depth,0xFFFF3636);
+  }else {StarVertices(vertices,used,x,y,size+2,depth,0xEE121820);StarVertices(vertices,used,x,y,size,depth,0xFFFFD44D);}
   device->DrawPrimitiveUP(D3DPT_TRIANGLELIST,used/3,vertices,sizeof(Vertex));
  }__finally{state->Apply();state->Release();}
 }
-void Player(IDirect3DDevice9* device){
+void LeaderStar(IDirect3DDevice9* device,const float* position,const float* matrix){WorldMarker(device,position,matrix,false);}
+void RacerMarker(IDirect3DDevice9* device,const float* position,const float* matrix,float arrest,float alpha){WorldMarker(device,position,matrix,true,arrest,alpha);}
+void Medal(Vertex* vertices,unsigned& used,const D3DVIEWPORT9& viewport,unsigned rank){
+ if(rank<1||rank>3)return;
+ constexpr DWORD rim[]={0xFF794025,0xFF777F8D,0xFFA66919},face[]={0xFFD58B55,0xFFD1D9E6,0xFFFFD75F};
+ constexpr float pi=3.14159265359f;
+ // The stock percent field now shows the lead racer's progress. Keep its
+ // right edge clear by placing the medal between the arrest count and label.
+ const float unit=viewport.Height/1080.f,x=viewport.X+viewport.Width-322.f*unit,y=viewport.Y+160.f*unit;
+ const float r=11.f*unit;
+ for(float side:{-1.f,1.f}){
+  vertices[used++]={x,y,0,1,rim[rank-1]};
+  vertices[used++]={x+side*r*.25f,y-r*1.85f,0,1,rim[rank-1]};
+  vertices[used++]={x+side*r*.85f,y-r*1.85f,0,1,rim[rank-1]};
+ }
+ for(unsigned i=0;i<16;++i){
+  const float a=2*pi*i/16.f,b=2*pi*(i+1)/16.f;
+  for(unsigned inner=0;inner<2;++inner){
+   const float radius=inner?.78f*r:r;const DWORD color=inner?face[rank-1]:rim[rank-1];
+   vertices[used++]={x,y,0,1,color};
+   vertices[used++]={x+std::cos(a)*radius,y+std::sin(a)*radius,0,1,color};
+   vertices[used++]={x+std::cos(b)*radius,y+std::sin(b)*radius,0,1,color};
+  }
+ }
+}
+void Player(IDirect3DDevice9* device,unsigned medal=0){
  if(!device||!visible||!Active()||FAILED(device->TestCooperativeLevel()))return;
  const mwcombat::HealthV1* player=nullptr;
  for(unsigned i=0;i<count;++i)if(cars[i].health.driver==0){player=&cars[i].health;break;}
@@ -85,6 +124,7 @@ void Player(IDirect3DDevice9* device){
   for(unsigned i=1;i<10;++i)Rect(vertices,used,x+w*i/10.f,y,unit,h,0x75080D12);
   char label[32];sprintf_s(label,"HP %u/%u",unsigned(player->remaining+.5f),unsigned(player->maximum+.5f));
   Text(vertices,used,x,y-20*unit,3*unit,label,0xFFF4F6F8);
+  Medal(vertices,used,viewport,medal);
   device->DrawPrimitiveUP(D3DPT_TRIANGLELIST,used/3,vertices,sizeof(Vertex));
  }__finally {state->Apply();state->Release();}
 }

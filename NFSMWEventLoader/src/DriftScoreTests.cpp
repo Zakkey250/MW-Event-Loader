@@ -13,6 +13,14 @@ int main(){
  using namespace mwel_drift;
  auto run=[](double step){Score s;for(double t=0;t<4.01;t+=step)s.update({t,float(t*20),0,20,35,float(t),true,false});return s;};
  auto s=run(.01);check(s.chain()>120&&s.total==0);auto pending=s.chain();
+ check(s.bestAngle==35);
+ {auto observed=s;auto t=observed.lastTime;auto x=observed.x;
+  observed.update({t+.01,x+.2f,0,20,-62,10,true,false});check(observed.bestAngle==62);
+  observed.update({t+.02,x+.4f,0,20,100,11,true,false});check(observed.bestAngle==62);
+  observed.update({t+.03,x+.6f,0,20,79,12,false,false});check(observed.bestAngle==62);
+  observed.update({t+.04,x+.8f,0,20,78,13,true,true});check(observed.bestAngle==62);
+  observed.finish(t+.04);check(observed.bestAngle==62);observed={};check(observed.bestAngle==0);
+ }
  // Repeated frame and reversed clocks cannot duplicate the award.
  auto duplicate=s;s.update({s.lastTime,100,0,20,35,10,true,false});check(s.chain()==duplicate.chain());
  s.finish(5);check(s.total==pending&&s.finished&&s.chain()==0);s.finish(6);check(s.total==pending);

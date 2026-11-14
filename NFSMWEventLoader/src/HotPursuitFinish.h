@@ -23,6 +23,8 @@ unsigned Calculate(){
  return resultCash;
 }
 float __fastcall Cash(void* params,void*){
+ const auto package=event_presentation::PackageFor(params);
+ if(package&&mwel_rpd::CaseFile(package->authoring))return 0; // Paid once as native bounty, never cash.
  if(Scope()&&unsigned(params)==scopeParams){const auto cash=Calculate();Log("HOT_PURSUIT_NATIVE_CASH_GETTER place=%u amount=%u native_award_latch_retained=1",resultPlace,cash);return float(cash);}
  // Result UI reads the same parameters after native EndRace/Stop. Keep the
  // awarded amount until the next staging boundary, not a borrowed object.

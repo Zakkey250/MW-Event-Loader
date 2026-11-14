@@ -170,7 +170,10 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWHUD_CombatDrawV1(void* devic
     // Custom speedometers intentionally remove the native gauge feature bits.
     // Follow the complete HUD visibility mask above, not native gauge bits,
     // or the health bar disappears when a replacement speedometer is installed.
-    combat_hud::Player(static_cast<IDirect3DDevice9*>(device));
+    using MedalFn=unsigned(__cdecl*)();
+    static MedalFn medal=nullptr;
+    if(!medal&&count){const auto event=GetModuleHandleW(L"MWEventLoader.asi");if(event)medal=reinterpret_cast<MedalFn>(GetProcAddress(event,"MWEL_RpdMedalV1"));}
+    combat_hud::Player(static_cast<IDirect3DDevice9*>(device),medal&&combat_hud::visible?medal():0);
     healthbars_bridge::LeaderOverlay(static_cast<IDirect3DDevice9*>(device));
     return 1;
 }

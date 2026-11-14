@@ -176,6 +176,10 @@ void __cdecl Finish(void* actor){
    break;
   }
  }
+ if(MWELRpdHotPursuitScope()){
+  if(verified&&slot>0)MWELRpdHotPursuitGoal(unsigned(race),MWELNeoCurrentKey(),unsigned(slot),Read<unsigned>(race+0x18+slot*0x194));
+  return;
+ }
  if(slot>=0)MWELDriftFinish(unsigned(slot),verified);
  if(waitForField&&verified&&FieldComplete(race))RestoreObservedFinishers();
  if(waitForField&&verified&&!FieldComplete(race)&&actor){

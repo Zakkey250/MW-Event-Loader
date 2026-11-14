@@ -7,9 +7,9 @@ struct SceneEngineRevs {
  unsigned rate=0,count=0,slots=0,activeMask=0,updates=0;
  float minRpm=0,maxRpm=0;
  std::vector<float> values;
- void* owned[8]{};
+ void* owned[SceneAssets::MaxCars]{};
  void Load(const std::string& folder,unsigned participants,unsigned cameraRate,unsigned cameraCount){
-  values.clear();rate=count=slots=0;Forget();
+  values.clear();rate=count=0;slots=participants;Forget();
   std::ifstream f(folder+"/engine-revs.bin",std::ios::binary);if(!f)return;
   unsigned h[4];SceneAssets::Read(f,h,4);
   if(h[0]!=0x3156524E||h[1]!=participants||h[2]!=cameraRate||h[3]!=cameraCount||h[3]>20000)throw std::runtime_error("Invalid engine rev directory");
@@ -29,11 +29,14 @@ struct SceneEngineRevs {
   owned[slot]=nullptr;activeMask&=~(1u<<slot);
  }
  void Forget(){for(auto& p:owned)p=nullptr;activeMask=0;}
- void Apply(unsigned slot,void* owner,float elapsed){
-  if(values.empty()||slot>=slots)return;
+ void Apply(unsigned slot,void* owner,float elapsed,float motionRev=.18f){
+  if(slot>=slots)return;
   auto live=Resolve(owner);if(!Valid(live)){owned[slot]=nullptr;activeMask&=~(1u<<slot);return;}
-  float t=std::clamp(elapsed*rate,0.f,float(count-1));auto i=unsigned(t),j=std::min(i+1,count-1);float a=t-i;
-  float rpm=values[slot*count+i]*(1-a)+values[slot*count+j]*a;
+  float rpm=std::clamp(motionRev,0.f,1.f);
+  if(!values.empty()){
+   float t=std::clamp(elapsed*rate,0.f,float(count-1));auto i=unsigned(t),j=std::min(i+1,count-1);float a=t-i;
+   rpm=values[slot*count+i]*(1-a)+values[slot*count+j]*a;
+  }
   reinterpret_cast<void(__thiscall*)(void*,bool,float,float)>(0x6A12D0)(live,true,rpm,3.f);
   owned[slot]=live;activeMask|=1u<<slot;++updates;
   // Read diagnostics only when caller requests them separately; the target

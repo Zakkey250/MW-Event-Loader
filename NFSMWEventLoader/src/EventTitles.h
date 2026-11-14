@@ -40,6 +40,7 @@ std::map<wchar_t,std::string>& NativeCodec(const std::string& path){
  return codecs.emplace(path,std::move(inverse)).first->second;
 }
 const char* __fastcall Lookup(void* unused,unsigned key){
+ if(auto rpd=MWELRpdLanguage(key))return rpd;
  auto found=titles.find(key);if(found==titles.end())return originalLookup(unused,key);
  auto& title=found->second;
  try{
@@ -47,7 +48,15 @@ const char* __fastcall Lookup(void* unused,unsigned key){
   if(cached==title.encoded.end()){
    auto& codec=NativeCodec(path);std::string encoded;unsigned missing=0;
    auto language=path;std::transform(language.begin(),language.end(),language.begin(),[](unsigned char c){return char(std::tolower(c));});
-   const auto& unicode=!title.japanese.empty()&&language.find("japanese")!=std::string::npos?title.japanese:title.unicode;
+   auto unicode=!title.japanese.empty()&&language.find("japanese")!=std::string::npos?title.japanese:title.unicode;
+   // Stock Japanese lacks these two glyphs. Keep the requested wording when
+   // a language pack supplies them, otherwise use readable equivalents only
+   // for this owned confirmation (no global font/language modifications).
+   if(title.event=="rpd-dispatch-confirmation"){
+    if(!codec.count(L'\u203b'))for(auto& c:unicode)if(c==L'\u203b')c=L'*';
+    const std::wstring term=L"\u8986\u9762";
+    if(!codec.count(L'\u8986'))if(auto at=unicode.find(term);at!=std::wstring::npos)unicode.replace(at,term.size(),L"\u3075\u304f\u3081\u3093");
+   }
    for(auto character:unicode){auto glyph=codec.find(character);if(glyph==codec.end()){encoded+='?';++missing;}else encoded+=glyph->second;}
    cached=title.encoded.emplace(path,std::move(encoded)).first;
    Log("EVENT_TITLE_LOOKUP key=%08X event=%s encoding=NFS_NATIVE path=%s unsupported_glyphs=%u frontend_visual_pending=1",key,title.event.c_str(),path.c_str(),missing);

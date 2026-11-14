@@ -1,4 +1,5 @@
 #pragma once
+#include "WorldProviderModule.h"
 #include "NativeMaterialAdapters.h"
 #include "NativeSceneMaterial.h"
 namespace event_material_guard {
@@ -6,7 +7,7 @@ void* blendOriginal=nullptr;void* tailOriginal=nullptr;bool installed=false;
 bool WorldGuard(unsigned site,bool tail){
  BYTE branch[5]{};if(!Copy(reinterpret_cast<void*>(site),branch,5)||branch[0]!=0xE9)return false;
  int displacement=0;memcpy(&displacement,branch+1,4);auto target=site+5+displacement;
- MEMORY_BASIC_INFORMATION region{};const auto module=GetModuleHandleW(L"World2MWNativeLoader.asi");
+ MEMORY_BASIC_INFORMATION region{};const auto module=mwel_world_provider::Module();
  if(!module||!VirtualQuery(reinterpret_cast<void*>(target),&region,sizeof(region))||region.AllocationBase!=module)return false;
  const BYTE blend[]={0xB8,0x80,0x2C,0x98,0,0x8B,0,0x85,0xC0};
  const BYTE end[]={0xB9,0x80,0x2C,0x98,0,0x8B,0x09,0x85,0xC9};BYTE code[9]{};
@@ -16,7 +17,7 @@ bool Install(){
  if(installed)return true;
  // World2MW already owns these native material/NIS scopes. It can initialize
  // after EventLoader, so do not race its guarded installation.
- if(GetModuleHandleW(L"World2MWNativeLoader.asi")){
+ if(mwel_world_provider::Module()){
   Log("EVENT_NATIVE_MATERIAL_GUARD delegated=World2MW duplicate_hook=0");return true;
  }
  if(!GetModuleHandleW(L"SunSet.asi"))return true;

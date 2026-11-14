@@ -5,6 +5,7 @@
 // No copies into TRACKS and no TexWizard configuration edits are required.
 namespace package_resources {
 bool enabled=false;
+bool texturePending=false;
 struct Map {std::string requested,radar,preview,prefix;unsigned eventKey=0,alias=0,texture=0;void* previewResource=nullptr;void* radarResource=nullptr;bool previewObserved=false;};
 std::vector<std::unique_ptr<Map>> maps;
 void*(__cdecl* originalCreate)(const char*,int,int,int,int);
@@ -33,6 +34,17 @@ void* __cdecl Texture(unsigned key,int fallback,int unloaded){
 }
 bool __cdecl MapLoad(int mode,char* prefix,int prefixSize,char* path,int pathSize){
  auto key=MWELNeoCurrentKey();
+ if(mode!=2){for(const auto& package:packages)if(mwel::RpdFreeRun(package.authoring)&&registration_experiment::Hash(package.nativeNamespace.c_str())==key){
+  // 0057BEF1..0057BF3B: use the same region unlock byte and resource names
+  // as native roaming. Do not change GRaceStatus, TrackInfo or map lifetime.
+  unsigned region=0,record=0;BYTE unlock=0;
+  if(!Copy(reinterpret_cast<void*>(0x91CF90),&region,4)||!region||!Copy(reinterpret_cast<void*>(region+0x10),&record,4)||!record||!Copy(reinterpret_cast<void*>(record+0xB0),&unlock,1))return false;
+  const char* selected=unlock>12?"MINI_MAP_UNLOCK_1":unlock>8?"MINI_MAP_UNLOCK_2":"MINI_MAP";
+  if(!prefix||!path||prefixSize<=int(strlen(selected))||pathSize<=0)return false;
+  if(strcpy_s(prefix,prefixSize,selected)||sprintf_s(path,pathSize,"TRACKS\\L2RA\\%s.BIN",selected)<0)return false;
+  const auto available=reinterpret_cast<unsigned(__cdecl*)(const char*)>(0x65F7A0)(path);
+  Log("RPD_FREERUN_RADAR prefix=%s native_region=%u course_map=0",prefix,unsigned(unlock));return available!=0;
+ }}
  for(const auto& map:maps)if(event_radar::UseCourse(mode,PlayMode(),key)&&map->eventKey==key){
   if(!prefix||!path||prefixSize<=0||pathSize<=0||map->prefix.size()>=unsigned(prefixSize)||map->requested.size()>=unsigned(pathSize))return false;
   // The native output path is only 64 bytes. Keep its short logical name;
@@ -84,6 +96,7 @@ bool Install(){
  if(!productionRuntime&&mwel::Read(marker,256)!="MW_EVENT_LOADER_PACKAGE_RESOURCES_EXPERIMENT_V1\n")return false;
  std::set<unsigned> aliases;
  for(const auto& package:packages){
+  if(mwel::RpdFreeRun(package.authoring))continue;
   if(!mwel::Feature(package.authoring,"replaceMap")){
    if(mwel::Correction(package.authoring))continue; // Preserve the native event's map and calibration.
    auto source=package.authoring.value("sourceEventId",std::string{});
@@ -128,7 +141,8 @@ bool Install(){
  return true;
 }
 bool Activate(){
- if(enabled||maps.empty())return true;
+ if(enabled)return true;
+ if(maps.empty()&&std::none_of(packages.begin(),packages.end(),[](const auto& p){return mwel::RpdFreeRun(p.authoring);}))return true;
  const BYTE createGuard[]={0x6A,0xFF,0x68,0x5B,0xA1,0x87,0};
  const BYTE textureGuard[]={0x53,0x55,0x56,0x57,0x8B,0x7C,0x24,0x14};
  const BYTE beginGuard[]={0x8B,0x44,0x24,0x04,0x56,0x8B,0xF1};
@@ -139,14 +153,34 @@ bool Activate(){
  if(memcmp(reinterpret_cast<void*>(0x5672F0),clearGuard,sizeof(clearGuard))||memcmp(reinterpret_cast<void*>(0x663F00),releaseGuard,sizeof(releaseGuard))||memcmp(reinterpret_cast<void*>(0x661760),streamGuard,sizeof(streamGuard)))return false;
  if(memcmp(reinterpret_cast<void*>(0x65FD30),createGuard,sizeof(createGuard))||memcmp(reinterpret_cast<void*>(0x503400),textureGuard,sizeof(textureGuard))||memcmp(reinterpret_cast<void*>(0x6616F0),beginGuard,sizeof(beginGuard))||memcmp(reinterpret_cast<void*>(0x57BEC0),mapGuard,sizeof(mapGuard)))return false;
  auto factory=reinterpret_cast<void*>(0x65FD30),texture=reinterpret_cast<void*>(0x503400),mapLoader=reinterpret_cast<void*>(0x57BEC0);
+ // V2 publishes its map aliases immediately after native DB publication.
+ // Leave the texture entry intact for that guarded installation, then chain
+ // the published provider from our first game frame. Its historical binary
+ // allowlist cannot recognize a freshly rebuilt EventLoader detour.
+ const bool deferTexture=mwel_world_provider::SourceModule()!=nullptr;
  if(MH_CreateHook(factory,Create,reinterpret_cast<void**>(&originalCreate))!=MH_OK)return false;
- if(MH_CreateHook(texture,Texture,reinterpret_cast<void**>(&originalTexture))!=MH_OK){MH_RemoveHook(factory);return false;}
+ if(!deferTexture&&MH_CreateHook(texture,Texture,reinterpret_cast<void**>(&originalTexture))!=MH_OK){MH_RemoveHook(factory);return false;}
  if(MH_CreateHook(mapLoader,MapLoad,reinterpret_cast<void**>(&originalMapLoad))!=MH_OK){MH_RemoveHook(factory);MH_RemoveHook(texture);return false;}
- if(MH_QueueEnableHook(factory)!=MH_OK||MH_QueueEnableHook(texture)!=MH_OK||MH_QueueEnableHook(mapLoader)!=MH_OK||MH_ApplyQueued()!=MH_OK){MH_DisableHook(factory);MH_DisableHook(texture);MH_DisableHook(mapLoader);MH_RemoveHook(factory);MH_RemoveHook(texture);MH_RemoveHook(mapLoader);return false;}
+ if(MH_QueueEnableHook(factory)!=MH_OK||(!deferTexture&&MH_QueueEnableHook(texture)!=MH_OK)||MH_QueueEnableHook(mapLoader)!=MH_OK||MH_ApplyQueued()!=MH_OK){MH_DisableHook(factory);MH_DisableHook(texture);MH_DisableHook(mapLoader);MH_RemoveHook(factory);MH_RemoveHook(texture);MH_RemoveHook(mapLoader);return false;}
+ if(deferTexture){originalTexture=reinterpret_cast<decltype(originalTexture)>(texture);texturePending=true;}
  enabled=true;Log("EVENT_PACKAGE_RESOURCES_ACTIVE maps=%u TRACKS_writes=0 TexWizard_required=0 lifetime_acceptance_pending=1",unsigned(maps.size()));return true;
+}
+void CompleteTextureAdapter(){
+ if(!texturePending)return;
+ auto site=reinterpret_cast<BYTE*>(0x503400);BYTE branch[5]{};
+ if(!Copy(site,branch,sizeof(branch))||branch[0]!=0xE9)return;
+ int displacement=0;memcpy(&displacement,branch+1,sizeof(displacement));
+ auto destination=site+5+displacement;HMODULE owner=nullptr;
+ if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+     reinterpret_cast<LPCWSTR>(destination),&owner)||owner!=mwel_world_provider::SourceModule())return;
+ texturePending=false;
+ auto status=MH_CreateHook(site,Texture,reinterpret_cast<void**>(&originalTexture));
+ if(status==MH_OK){status=MH_EnableHook(site);if(status!=MH_OK)MH_RemoveHook(site);}
+ Log("EVENT_PACKAGE_V2_TEXTURE_CHAIN status=%d after_provider_publication=1",status);
 }
 void LoadPreviews(){
  if(!enabled)return;
+ if(!productionRuntime&&mwel::fs::exists(game/L"MWEventLoader.preview-isolation-test")){Log("EXPERIMENT_PREVIEW_ISOLATION queued_previews=0 diagnosis_only=1");return;}
  for(auto& map:maps)if(!map->preview.empty()&&!map->previewResource){
   auto resource=originalCreate(map->preview.c_str(),1,0,0,0);
   if(!resource){Log("EXPERIMENT_RACE_ABORT package_preview_resource_unavailable");continue;}

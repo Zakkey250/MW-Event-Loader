@@ -3,7 +3,7 @@
 #include "../../World2MW/src/NativeLoader/NeoRespawnGeometry.h"
 #include "NeoRecoveryPrefix.h"
 static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
- if(!neoSettings.enabled||neoSettings.controller!=2||editorStock||!EventGeometryAvailable())return 0;
+ if(MWELRpdSprintRecoveryHeld(v.handle)||!neoSettings.enabled||neoSettings.controller!=2||editorStock||!EventGeometryAvailable())return 0;
  auto vt=*reinterpret_cast<unsigned**>(ai);
  auto events=GetModuleHandleW(L"MWEventLoader.asi");auto local=events?reinterpret_cast<unsigned(__cdecl*)()>(GetProcAddress(events,"MWEL_LocalRaceTestV1")):nullptr;
  bool localPlayer=(neoSettings.testMode&&neoSettings.autoStart)||(local&&local());
@@ -46,6 +46,9 @@ static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
   if(mwel_grid::BeforeRecoveryEntry(state.station,approaching,approaching?state.launch.Cursor(v.position):0,beforeEntry,v.halfLength)){
    Log("MW_NEOAI_RESPAWN_DEFERRED key=%u CP=%d before_reference_m=%.3f approach=%u forward_placement_prevented=1",v.handle,leg,-beforeEntry,unsigned(approaching));return 0;
   }
+  // Reuse one scenery-group snapshot across the landing search. Refresh it
+  // after native placement, which can change the streamed scenery.
+  std::optional<CollisionWorld::RayQueryScope> geometryQuery(std::in_place,collision);
   float reference=approaching?state.launch.Cursor(v.position):state.recoveryAnchor.Reference(state.station),cursor=reference,p[]={v.position.x,v.position.y,v.position.z};
   if(!NeoProjectRoad(authored,{p[0],p[1],p[2]},reference,cursor,100,8,90)){
    auto measured=NeoGroundTrajectory(collision,authored,reference,p,0,16.f,true);
@@ -70,9 +73,12 @@ static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
   if(!approaching&&state.respawnHistory.count&&unsigned(leg)<yellowLocalBranchLegs.size()){
    for(const auto& span:found->second.branchSpans){
     if(state.station<span.begin||state.station>span.end||!span.branch||span.branch>yellowLocalBranchLegs[leg].size())continue;
-    if(mwel_branch::RepeatedJam(state.respawnHistory.count,state.respawnHistory.anchor,state.station,v.speed)){
+    // Compare with the most recent attempt. The history's exclusion anchor
+    // intentionally remains at its first pose: using it here loses repeated
+    // jam evidence when two nearby obstructions span its 30-metre window.
+    if(mwel_branch::RepeatedJam(state.respawnHistory.count,state.respawnHistory.lastProgress,state.station,v.speed)){
      state.staticBranchFailures[span.branch]=GetTickCount64();
-     Log("MW_NEOAI_BRANCH_NATIVE_JAM key=%u CP=%d branch=%u attempts=%u station=%.3f anchor=%.3f actual_stationary_recovery=1 checked_main_fork_required=1",v.handle,leg,span.branch,state.respawnHistory.count,state.station,state.respawnHistory.anchor);
+     Log("MW_NEOAI_BRANCH_NATIVE_JAM key=%u CP=%d branch=%u attempts=%u station=%.3f anchor=%.3f actual_stationary_recovery=1 checked_main_fork_required=1",v.handle,leg,span.branch,state.respawnHistory.count,state.station,state.respawnHistory.lastProgress);
     }
     auto failure=state.staticBranchFailures.find(span.branch);if(failure==state.staticBranchFailures.end())continue;
     const auto& alternative=yellowLocalBranchLegs[leg][span.branch-1];
@@ -86,6 +92,7 @@ static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
    }
   }
   auto road=NeoGroundTrajectory(collision,*recoveryRoad,cursor,p,0,220.f,true);
+  if(road.size()<2)return 0;
   unsigned candidates=0,groundRejected=0,distanceRejected=0,poseRejected=0,historyRejected=0,occupiedRejected=0,continuationRejected=0,nativeAttempts=0;
   BeginYellowBarrierQuery({p[0],p[1],p[2]});
   // A multi-car pile can occupy every nearby recovery slot. Search farther
@@ -96,8 +103,12 @@ static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
   // placement was valid as a static pose but immediately repeated the same
   // collision.  One car-length of run-up gives the freshly rebuilt guidance a
   // clear approach while remaining strictly behind committed race progress.
+  float previousStation=std::numeric_limits<float>::infinity();
   for(float back:{6.f,12.f,20.f,32.f,48.f,64.f,96.f,128.f,160.f,192.f}){
-   float station=std::max(road.front().station,cursor-back);Vec3 center{},a{},b{};
+   const float station=std::max(road.front().station,cursor-back);
+   if(station==previousStation)break;
+   previousStation=station;
+   Vec3 center{},a{},b{};
    if(!YellowLineSample(road,station,center)||!YellowLineSample(road,std::max(road.front().station,station-2),a)||!YellowLineSample(road,std::min(road.back().station,station+2),b))continue;
    auto direction=mwneo::UnitXZ({b.x-a.x,b.y-a.y,b.z-a.z});if(mwneo::LengthXZ(direction)<.9f)continue;
    float current=mwneo::CrossXZ(direction,{p[0]-center.x,0,p[2]-center.z});
@@ -127,7 +138,9 @@ static unsigned NeoRespawn(const mwneo::Vehicle& v,void* ai){
     // especially on a sloping deck. The measured final pose must still
     // match the independently checked destination below.
     float position[]={surface.x,surface.y+2.f,surface.z},heading[]={direction.x,direction.y,direction.z};
+    geometryQuery.reset();
     ++nativeAttempts;bool placed=event_neo_driver::MWELNeoPlaceVehicle(ai,position,heading);
+    geometryQuery.emplace(collision);
     auto vehicle=*reinterpret_cast<BYTE**>(primary+0x48);NeoBodyMotion actual{};bool read=NeoReadBody(vehicle,actual);
     // A failed native ground query may move the body but leave its native
     // surface invalid. Require BOTH native support and measured geometry.

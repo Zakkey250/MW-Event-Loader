@@ -23,7 +23,7 @@ void __fastcall Row(void* self,void*){
  }
 }
 void __fastcall Setup(void* self,void*){
- originalSetup(self);if(!Scope()||expanded_leaderboard::Read<unsigned>(self,0x1E4)!=0)return;
+ originalSetup(self);MWELRpdResults(self);if(!Scope()||expanded_leaderboard::Read<unsigned>(self,0x1E4)!=0)return;
  auto package=expanded_leaderboard::Read<const char*>(self,0x10);
  auto object=package?reinterpret_cast<expanded_leaderboard::Object(__cdecl*)(const char*,unsigned)>(0x524850)(package,0x30EE5E68):nullptr;
  if(object)expanded_leaderboard::Text(object,drift_hud::Label(1));
@@ -33,7 +33,7 @@ void __fastcall Setup(void* self,void*){
 // and the speed-trap SPEEDTRAP_SPEED. Replace these native FEStrings only
 // after a real Drift finish; no clocks, event types or ordinary photos change.
 void __fastcall Photo(void* self,void*){
- originalPhoto(self);if(!Scope()||!drift_race::finalScores||drift_race::faulted)return;
+ originalPhoto(self);MWELRpdSprintPhoto(self);if(!Scope()||!drift_race::finalScores||drift_race::faulted)return;
  auto package=expanded_leaderboard::Read<const char*>(self,0x10);if(!package)return;
  char value[48];sprintf_s(value,"%s  %u PTS",drift_hud::Label(1),drift_race::scores[0].total);
  const unsigned targets[]={0xAB6AAFDDu,0x37BEA03Bu,0x424BB244u,expanded_leaderboard::Hash("SPEEDTRAP_SPEED")};

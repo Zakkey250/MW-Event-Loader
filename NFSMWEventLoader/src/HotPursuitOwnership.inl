@@ -24,6 +24,29 @@ unsigned FindPursuit(unsigned target){
   if(!Read(node,node))break;
  }return 0;
 }
+bool ReleaseGroundSupport(unsigned pursuit,unsigned departing){
+ // AIPursuit owns GroundSupportRequest at primary+1DC. Removing its activity
+ // from CopMgr does not clear that support vehicle snapshot. Once native cop
+ // pooling has destroyed its cars, the deferred destructor (004337F5)
+ // dereferences freed IVehicles in 0042B460. Release through the native
+ // routine while those cars and their ICop behaviours are still alive.
+ if(!Table(pursuit,0x892770))return false;
+ const auto support=pursuit-0x48+0x1DC;
+ unsigned list=0,count=0,state=0;if(!Read(support+0xC,list)||!Read(support+0x14,count)||!Read(support+0x78,state)||count>64)return false;
+ if(!count&&departing)return true;
+ bool contains=!departing;
+ for(unsigned i=0;i<count;++i){unsigned vehicle=0;
+  if(!Read(list+i*4,vehicle)||!Table(vehicle,0x8AA828)||Vehicle(Handle(vehicle))!=vehicle){
+   Log("HOT_PURSUIT_GROUND_SUPPORT_RELEASE_REFUSED pursuit=%08X index=%u count=%u stale_vehicle=1",pursuit,i,count);return false;
+  }
+  if(vehicle==departing)contains=true;
+ }
+ if(!contains)return true;
+ reinterpret_cast<void(__thiscall*)(unsigned)>(0x42B410)(support);
+ unsigned after=~0u;Read(support+0x14,after);
+ Log("HOT_PURSUIT_GROUND_SUPPORT_RELEASED pursuit=%08X cars=%u remaining=%u before_cop_lifetime_end=1 native_release=0042B410 prior_state=%u",pursuit,count,after,state);
+ return after==0;
+}
 void ReleaseGroups(){
  if(!owner||(MWELNeoCurrentKey()!=0&&MWELNeoCurrentKey()!=owner))return;
  for(unsigned slot=1;slot<createdPursuits.size();++slot){const auto pursuit=createdPursuits[slot];
@@ -32,7 +55,10 @@ void ReleaseGroups(){
   const auto groups=NativeGroups();
   if(pursuit&&std::find(groups.begin(),groups.end(),pursuit)!=groups.end()&&Table(pursuit,0x892770)){
    const auto target=TargetHandle(pursuit);
-   if(target&&target==createdTargets[slot]&&FindPursuit(target)==pursuit)reinterpret_cast<void(__thiscall*)(unsigned)>(0x4198E0)(pursuit);
+   if(target&&target==createdTargets[slot]&&FindPursuit(target)==pursuit){
+    ReleaseGroundSupport(pursuit);
+    reinterpret_cast<void(__thiscall*)(unsigned)>(0x4198E0)(pursuit);
+   }
   }
  }
 }
@@ -50,13 +76,28 @@ void BindPerpetrator(unsigned pursuit,unsigned target){
 // the target vehicle's pursuit. A queued request can outlive event teardown.
 // Reject that invalid request before activation/count/list side effects.
 bool __fastcall SpawnForPursuit(unsigned manager,void*,unsigned pursuit,unsigned car){
- if((Active()||gauntlet_runtime::Duel())&&!roadblockDepth){
+ if((Active()||gauntlet_runtime::Duel())&&(!roadblockDepth||MWELRpdHotPursuitScope())){
   ApplyDeployment(manager+0x54,DeploymentLimit());
   if(ChaseCount(0)>=DeploymentLimit())return false;
  }
  // Queued native/NFRR requests may predate our per-frame allocation. Enforce
  // individual eligibility at the last native activation boundary as well.
  if(Active()&&!roadblockDepth){
+  // Native pooled pursuit activation chooses its own placement before
+  // AddActivity can rebalance ownership. In RPD that produced cars beside
+  // the officer with a suspect kilometres away. The checked target-relative
+  // queued factory is the sole ground reinforcement path for police players.
+  const auto policy=event_race_policies::Current();
+  if(policy&&mwel_rpd::Armed(policy->authoring))return false;
+  if(RpdDispatchOwned()){
+   // The event uses explicit heat-model requests. A pooled pursuit request
+   // can arrive from the ambient Heat 1 roster after GO.
+   const auto dispatch=RpdDispatch();
+   if(!dispatch||!Table(car,0x8AA828))return false;
+   const auto source=reinterpret_cast<NFSPluginSDK::MW05::IVehicle*>(car)->GetVehicleKey();
+   const auto heat=MWELRpdFleetHeat();
+   if(rpd_vehicle_catalog::FleetEnabled(heat)?!rpd_vehicle_catalog::FleetAccepts(heat,source):source!=dispatch->source)return false;
+  }
   const auto target=TargetHandle(pursuit);
   if(!ReadyTarget(target)||!replacements.RefillReady(GetTickCount64())||replacements.Held(target,GetTickCount64()))return false;
  }
@@ -72,7 +113,7 @@ bool __fastcall SpawnForPursuit(unsigned manager,void*,unsigned pursuit,unsigned
  // pooled-body coordinates still visible at this return boundary.
  if(spawned&&Active()&&owner==MWELNeoCurrentKey()&&combat_health_runtime::Racing()){
   unsigned ai=0,driver=0;
-  if(Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&!Roadblock(car,ai)&&!SUV(car)){
+  if(Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&!Roadblock(car,ai)&&!UnsupportedSUV(car)){
    auto it=std::find_if(spawnActivations.begin(),spawnActivations.end(),[&](const auto& a){return !a.car||a.car==car;});
    if(it!=spawnActivations.end()){*it={car,Handle(car),GetTickCount64()};Log("HOT_PURSUIT_ACTIVATION_QUEUED cop=%u await_physics=1",Handle(car));}
   }
@@ -99,7 +140,7 @@ void FinalizeSpawnActivations(){
   if(!reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688200)(a.car))continue;
   if(reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688170)(a.car)){a={};continue;}
   unsigned ai=0,pursuit=0,driver=0;
-  if(!Read(a.car+0x54,ai)||!Table(ai,0x892480)||Roadblock(a.car,ai)||SUV(a.car)||
+  if(!Read(a.car+0x54,ai)||!Table(ai,0x892480)||Roadblock(a.car,ai)||UnsupportedSUV(a.car)||
      !Read(a.car+0x94,driver)||driver!=2||!Read(ai+0x70,pursuit)){a={};continue;}
   const auto target=TargetHandle(pursuit),racer=Vehicle(target);if(!ReadyTarget(target)||!racer)continue;
   combat_impact::Motion motion,targetMotion;if(!combat_health_runtime::NativeMotion(a.car-0x80,motion)||!combat_health_runtime::NativeMotion(racer-0x80,targetMotion))continue;
@@ -128,6 +169,7 @@ void FinalizeSpawnActivations(){
  }
 }
 unsigned EnsurePursuit(unsigned slot,unsigned target){
+ if(MWELRpdPursuitCompleted(target))return 0;
  if(auto existing=FindPursuit(target)){BindPerpetrator(existing,target);return existing;}
  if(!slot||slot>=16||!ReadyTarget(target)||GetTickCount64()<nextPursuitCreate[slot])return 0;
  nextPursuitCreate[slot]=GetTickCount64()+5000;
@@ -176,6 +218,9 @@ bool ExclusiveJoin(unsigned car,unsigned desired){
  return added||current==desired;
 }
 void __fastcall AcquireTarget(unsigned self,void*,unsigned sim){
+ if(sim){if(const auto p=event_race_policies::Current();p&&mwel_rpd::CaseFile(p->authoring)){unsigned race=0,player=0,handle=0;
+  if(Read(0x91E000,race)&&Read(race+0x18,player)&&Read(sim+8,handle)&&handle==player){Log("RPD_OFFICER_TARGET_IGNORED player=%u police_friendly_fire_guard=1",player);return;}
+ }}
  if(!roadblockDepth&&sim&&owner)for(auto& a:assignments)if(a.targetObject==self&&LockValid(a)){
   const auto target=Vehicle(a.target);if(target&&sim!=target-0x80){sim=target-0x80;if(worldLogEnabled)++steeringRedirects;}break;
  }
@@ -194,10 +239,21 @@ unsigned ChooseAssignment(unsigned incoming,unsigned car){
  unsigned prior=0,ai=0,pursuit=0;
  if(auto a=AssignmentFor(car);a&&LockValid(*a))prior=a->target;
  else if(Read(car+0x54,ai)&&Read(ai+0x70,pursuit))prior=TargetHandle(pursuit);
+ // A fresh explicit reinforcement belongs to the suspect whose road was
+ // checked for its placement. Do not immediately redirect it to a distant
+ // less-covered racer. Existing visible cars still use native reassignment.
+ if(intercept.target&&GetTickCount64()<intercept.until&&ReadyTarget(intercept.target)&&
+    std::find(intercept.before.begin(),intercept.before.end(),Handle(car))==intercept.before.end()){
+  combat_impact::Motion motion;
+  if(combat_health_runtime::NativeMotion(car-0x80,motion)){
+   const auto delta=motion.position-intercept.position;
+   if(std::abs(delta.y)<=8&&std::hypot(delta.x,delta.z)<=35&&FindPursuit(intercept.target))return intercept.target;
+  }
+ }
  unsigned best=0,bestCount=~0u,bestRank=~0u;
  for(unsigned slot=0;slot<count;++slot){unsigned target=0,rank=0;Read(race+0x18+slot*0x194,target);Read(race+0x18+slot*0x194+0x10,rank);
   if(!ReadyTarget(target)||!FindPursuit(target))continue;if(!rank||rank>count)rank=slot+1;
-  const auto allocated=Allocated(target,cars);const auto amount=allocated-(prior==target&&allocated?1u:0u);if(amount>=TargetQuota(rank,count))continue;
+  const auto allocated=Allocated(target,cars);const auto amount=allocated-(prior==target&&allocated?1u:0u);if(amount>=TargetQuota(rank,count,target))continue;
   // Fill every racer's first slot before any second slot. Keep the native
   // incoming target only when it is tied for the least-covered racer.
   if(amount<bestCount||(amount==bestCount&&((target==incoming&&best!=incoming)||(best!=incoming&&rank<bestRank)))){
@@ -225,6 +281,9 @@ bool __fastcall AddActivity(unsigned self,void*,unsigned car){
 }
 void __fastcall ReleaseCop(unsigned manager,void*,unsigned car){
  if(!roadblockDepth&&owner&&!draining&&GetCurrentThreadId()==combat_health_runtime::gameThread){unsigned ai=0,current=0;Read(car+0x54,ai);Read(ai+0x70,current);
+  // Native OnDetached only clears ground support when its final member leaves.
+  // A pooled member must not survive in an older snapshot in the meantime.
+  for(const auto group:NativeGroups())ReleaseGroundSupport(group,car);
   ++ownershipDepth;for(const auto group:NativeGroups())if(group!=current)reinterpret_cast<bool(__thiscall*)(unsigned,unsigned)>(0x4338B0)(group,car);--ownershipDepth;
   const auto h=Handle(car);for(auto& a:assignments)if(a.car==car&&a.cop==h)a={};
   for(auto& d:detections)if(d.cop==h)d={};

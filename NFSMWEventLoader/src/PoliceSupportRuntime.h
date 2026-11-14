@@ -21,16 +21,18 @@ struct HeliBinding {unsigned car=0,handle=0,object=0,target=0;};
 std::array<HeliBinding,4> helicopterBindings{};
 unsigned supportLeaderLogged=0;ULONGLONG nextSupportLog=0;
 ULONGLONG nextCopRequestLog=0,nextSupportFlightLog=0;
+ULONGLONG nextOccupiedHelicopterLog=0;
+ULONGLONG nextRpdHelicopterAttempt=0;
 void ResetHelicopterSnapshot();
 void PublishHelicopterSnapshot(unsigned);
 void PublishHelicopterObject(unsigned,unsigned,unsigned);
 unsigned __cdecl HelicopterLeaderSim();
 bool IsHelicopterTarget(unsigned);
-void ResetSupport(){ResetHelicopterSnapshot();placedBlocks={};candidateKnown=false;helicopterBindings={};supportLeaderLogged=0;nextSupportLog=nextCopRequestLog=nextSupportFlightLog=0;}
+void ResetSupport(){ResetHelicopterSnapshot();placedBlocks={};candidateKnown=false;helicopterBindings={};supportLeaderLogged=0;nextSupportLog=nextCopRequestLog=nextSupportFlightLog=nextOccupiedHelicopterLog=nextRpdHelicopterAttempt=0;}
 unsigned SupportLeader(){
  if(!Active())return 0;
  unsigned race=0,count=0,best=0,bestRank=~0u;
- if(!gauntlet_runtime::Read(0x91E000,race)||!gauntlet_runtime::Read(race+0x1958,count)||count>8)return 0;
+ if(!gauntlet_runtime::Read(0x91E000,race)||!gauntlet_runtime::Read(race+0x1958,count)||count>(MWELRpdHotPursuitScope()?9u:8u))return 0;
  for(unsigned slot=0;slot<count;++slot){unsigned handle=0,rank=0,flags=0;BYTE finished=0;
   if(!gauntlet_runtime::Read(race+0x18+slot*0x194,handle)||!gauntlet_runtime::Read(race+0x18+slot*0x194+0x1C,flags)||flags||
      !gauntlet_runtime::Read(race+0x18+slot*0x194+0x21,finished)||finished||!ReadyTarget(handle))continue;
@@ -46,6 +48,7 @@ bool SupportAllowed(unsigned pursuit){
  const auto leader=SupportLeader();return leader&&TargetHandle(pursuit)==leader;
 }
 int __fastcall RequestSupport(unsigned pursuit,void*){
+ if(const auto p=event_race_policies::Current();p&&mwel_rpd::Armed(p->authoring)&&!p->authoring.at("policeAutoRoadblock").get<bool>())return 0;
  const bool allowed=SupportAllowed(pursuit);auto callback=originalSupportRequest;
  if(!callback){unsigned table=0,fn=0;if(!gauntlet_runtime::Read(pursuit,table)||!gauntlet_runtime::Read(table+0x84,fn))return 0;callback=reinterpret_cast<SupportRequestFn>(fn);}
  const int result=allowed?callback(pursuit):0;
@@ -62,13 +65,35 @@ void __declspec(naked) RoadblockRequestSite(){
  }
 }
 bool __fastcall RequestHelicopter(unsigned manager,void*,unsigned pursuit){
+ const auto package=event_race_policies::Current();const bool officer=package&&mwel_rpd::Armed(package->authoring);
+ if(officer&&(!package->authoring.at("policeAutoHelicopter").get<bool>()||GetTickCount64()<nextRpdHelicopterAttempt))return false;
  if(Active()){
+  // EN1.3 004269BB reads this exact global and returns false at 00426BEB
+  // when a native helicopter already exists. Avoid the O(racers * pursuits)
+  // redirect/eligibility walks for requests the factory cannot accept. Never
+  // cache occupancy, change the air budget, or skip the native flight update.
+  // Other executable/hook surfaces retain the original path.
+  static const bool nativeGate=[](){const BYTE expected[]={0xA1,0x1C,0xD6,0x90,0,0x85,0xC0};BYTE actual[sizeof(expected)]{};return Copy(reinterpret_cast<void*>(0x4269BB),actual,sizeof(actual))&&!memcmp(actual,expected,sizeof(actual));}();
+  unsigned occupied=0;
+  if(nativeGate&&gauntlet_runtime::Read(0x90D61C,occupied)&&occupied){
+   if(worldLogEnabled){const auto now=GetTickCount64();if(now>=nextOccupiedHelicopterLog){nextOccupiedHelicopterLog=now+3000;Log("HOT_PURSUIT_HELI_NATIVE_OCCUPIED redirect_walk_skipped=1 native_spawn_result=0 flight_unchanged=1");}}
+   return false;
+  }
   const auto leader=SupportLeader(),desired=leader?FindPursuit(leader):0;if(!desired)return false;
-  Log("HOT_PURSUIT_HELI_REQUEST incoming=%u leader=%u native_target_redirect=1",TargetHandle(pursuit),leader);
+  if(worldLogEnabled)
+   Log("HOT_PURSUIT_HELI_REQUEST incoming=%u leader=%u native_target_redirect=1",TargetHandle(pursuit),leader);
+  // Native factory activation can enter its pursuit action synchronously,
+  // before the next RefreshHelicopters frame. Publish its actual subject now.
+  PublishHelicopterSnapshot(leader);
   pursuit=desired;
- }
- if(!SupportAllowed(pursuit))return false;
+  // FindPursuit already verified this group's target against the current
+  // leader. The snapshot only publishes that choice to the flight hooks.
+ }else if(!SupportAllowed(pursuit))return false;
  const bool spawned=originalHelicopter(manager,pursuit);
+ // Failed native factories can be queried every frame while streaming.
+ // RPD retries at most once per second; an existing helicopter still owns
+ // its normal native flight, pursuit, lifetime and replacement decisions.
+ if(officer)nextRpdHelicopterAttempt=GetTickCount64()+1000;
  if(worldLogEnabled&&(Active()||gauntlet_runtime::Duel()))Log("COMBAT_NATIVE_HELI_FACTORY spawned=%u racer=%u",unsigned(spawned),TargetHandle(pursuit));
  return spawned;
 }

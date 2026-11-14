@@ -3,11 +3,11 @@
 [English](README.md) · [イベントエディタ](https://zakkey250.github.io/MW-Event-Editor/) · [リリース一覧](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.1.0:** ドリフトレースを追加し、MW Arcade Drift 0.2.0と連携しました。専用HUD・ポイント結果・NeoAIのドリフト走行に対応します。[更新内容](docs/Release-Notes-1.1.0.md)
+> **1.2.0:** ダウンヒルバトル、公開W2C v2 RC4対応、RPD CASE FILES（試作）を追加しました。[更新内容](docs/Release-Notes-1.2.0.md)
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader 1.1.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.1.0) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.2.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.0) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。
@@ -59,12 +59,12 @@
 NFRR / MW Native Free Roam Racer【必須】
 
 相手車両の選定とNeoAI連携などに使用します。Event Loaderに対応した版を使用してください。
-作者GitHub：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+作者GitHub：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 
 LB / MW Limit Breaker【必須】
 
 NFRRの配布アーカイブに含まれています。NFRR単体では任意の付属MODですが、Event Loaderの多台数イベントでは併用してください。Event Loader本体やイベントデータZIPには重複して含めていません。
-NFRR配布ページ（LB同梱）：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+NFRR配布ページ（LB同梱）：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 
 MWArsenal【ArmsAssist・武器追加種目に必須】
 
@@ -72,11 +72,11 @@ MWArsenal本体とアセットの両方が必要です。MWArsenalだけでは3�
 MWArsenal専用のストリングファイルを追加導入する必要はありません。必要なテキスト表示はArmsAssistが補います。
 Shiftersc & LEE-RYO 作者配布ページ：<https://www.nfsaddons.com/downloads/nfsmw/tools/11267/mw-arsenal.html>
 
-MW Arcade Drift 0.2.0【ドリフト種目に必須】
+MW Arcade Drift 0.2.1【ドリフト種目に必須】
 
 Event Loader 1.1.0から連携に対応しました。Coreパッケージに含まれる **MWArcadeDrift.asi** と **MWArcadeDriftAI.asi** を両方導入してください。プレイヤーはイベント中にスペシャルモードへ自動切り替えし、NeoAIの相手車両もドリフト補助を使用します。終了後は元のプレイヤーモードへ戻ります。ドリフト以外のイベントだけなら不要です。専用Editorは車種別設定や操作機器の調整用で、任意です。
 作者GitHub：<https://github.com/Zakkey250/MW-Arcade-Drift>
-Core 0.2.0：<https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.0>
+Core 0.2.1：<https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.1>
 
 MWHealthbars / NFSMW Cop Car Healthbars【推奨・任意】
 
@@ -114,6 +114,10 @@ W2Cイベントには、対応するW2Cワールドとそのローダーが別�
 
 「1.3」はMWのゲームバージョンです。同じspeed.exeという名前でも、内容が異なる実行ファイルは対応していない場合があります。日本語など英語以外のゲーム資源を使う場合も、対応する実行ファイルを使用してください。全てのMODの組み合わせでの動作を保証するものではありません。
 
+### W2C to MW v2 RC4
+
+ダウンヒルバトルに必要です。イベントエディタでは、Rockportの構成を公開RC4へ移行できます。チェックポイント警告が表示されたイベントは個別に確認してください。[W2C to MW v2 RC4](https://github.com/Zakkey250/W2C-to-MW-Converter/releases/tag/v2.0.0-rc4)。
+
 ## 配布物の構成
 
 本体アーカイブ
@@ -128,7 +132,7 @@ GitHubの配布物
 ・本体アーカイブ。
 ・MW Cutscene Converter。
 
-本体とコンバーターは別々のアーカイブです。今回の公開にはサンプルイベントを含みません。イベントエディタはブラウザで利用します。イベントデータZIPにASIやインストーラーは含まれません。NFRR・LB・MWArsenal・Healthbars・ASIローダーは別途導入してください。ゲームEXE、ワールド本体、変換済みカットシーンも同梱していません。
+本体とコンバーターは別々のアーカイブです。今回の公開にはサンプルイベントを含みません。イベントエディタはブラウザで利用します。イベントデータZIPにASIやインストーラーは含まれません。NFRR・LB・MWArsenal・Healthbars・ASIローダーは別途導入してください。本体ZIPにはHP再現シーンの再生用ファイルとRPD開始ジングル4曲を同梱しています。
 
 ## 更新通知
 
@@ -286,7 +290,7 @@ MW Event Editorを開く：<https://zakkey250.github.io/MW-Event-Editor/>
 
 ## 追加種目 4：ドリフトレース
 
-スプリント／サーキット専用のポイント勝負です。警察・武器・追加HPルールは使用しません。MW Arcade Drift 0.2.0のCoreを別途導入してください。
+スプリント／サーキット専用のポイント勝負です。警察・武器・追加HPルールは使用しません。MW Arcade Drift 0.2.1のCoreを別途導入してください。
 
 ・有効なドリフトの継続2秒ごとに倍率が+1倍、最大10倍になります。
 ・壁・他車への接近でボーナスが加わります。強い壁ヒットでは未確定コンボを失いますが、確定済みの得点は残ります。
@@ -333,7 +337,7 @@ MWHealthbars：<https://github.com/trelbutate/MWHealthbars>
 ・Ultimate ASI Loader：ThirteenAG。
 Ultimate ASI Loader：<https://github.com/ThirteenAG/Ultimate-ASI-Loader>
 ・NFRR・LB・MW Event Editor：Zakkey250。
-NFRR：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+NFRR：<https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 LB：<https://github.com/Zakkey250/MW-Limit-breaker>
 MW Event Editor：<https://zakkey250.github.io/MW-Event-Editor/>
 

@@ -8,6 +8,8 @@
 // the native LeaderBoard's four-entry arrays. The FE package owns all clones.
 namespace expanded_leaderboard {
 inline bool(*combatActive)()=nullptr;
+inline bool(*policeSide)()=nullptr;
+inline const char*(*policeStatus)(unsigned)=nullptr;
 inline bool(*combatHealth)(unsigned,unsigned,float&,float&)=nullptr;
 inline bool(*driftActive)()=nullptr;
 inline unsigned(*driftScore)(unsigned)=nullptr;
@@ -49,7 +51,20 @@ struct State {Object package=nullptr;void* board=nullptr;std::array<Row,16> rows
 inline State state;
 inline unsigned RowKey(unsigned row,unsigned part){char key[48];sprintf_s(key,"MWEL_Leaderboard_%u_%u",row,part);return Hash(key);}
 inline bool FeaturesVisible(void* board,unsigned long long features){return (Read<unsigned long long>(board,0x18)&features)!=0;}
-inline void HideExtra(){if(state.ready)for(unsigned i=4;i<16;++i){Show(state.rows[i].name,false);Show(state.rows[i].rank,false);Show(state.rows[i].back,false);}}
+inline void HideExtra(){
+ if(!state.ready)return;
+ // Crash-result/retry may unload the owning FNG before HudElement sends
+ // its last visibility update. Cached rows are borrowed, so a non-null
+ // pointer (or a successful guarded read) does not establish ownership.
+ auto engine=Read<void*>(reinterpret_cast<void*>(0x91CADC));
+ auto live=engine&&state.packageName[0]?reinterpret_cast<Object(__thiscall*)(void*,const char*)>(0x516AF0)(engine,state.packageName):nullptr;
+ if(!live||live!=state.package){state={};return;}
+ for(unsigned i=4;i<16;++i)for(unsigned part=0;part<3;++part){
+  auto object=Find(live,RowKey(i,part));
+  auto expected=part==0?state.rows[i].name:part==1?state.rows[i].rank:state.rows[i].back;
+  if(object&&object==expected)Show(object,false);
+ }
+}
 inline void FeaturesChanged(void* board,unsigned long long features){
  // Native HudElement owns only its original objects. Hide borrowed clones
  // synchronously too, even when pause/NIS stops LeaderBoard::Update entirely.
@@ -108,6 +123,7 @@ inline unsigned PlayerSlot(void* player,BYTE* race,unsigned count){
 }
 inline void Text(Object object,const char* text){reinterpret_cast<void(__cdecl*)(void*,const char*,...)>(0x515D70)(object,"%s",text);}
 inline void Format(char(&text)[96],BYTE* race,BYTE* info,unsigned slot,unsigned playerSlot,unsigned mode,bool metric,unsigned phase){
+ if(policeStatus)if(const auto status=policeStatus(Read<unsigned>(info))){strcpy_s(text,status);return;}
  if(!phase){auto name=Read<const char*>(info,8);for(unsigned j=0;name&&j<sizeof(text)-1;++j){text[j]=Read<char>(name,j);if(!text[j])break;}if(!text[0])sprintf_s(text,"Racer %u",slot+1);return;}
  if(driftActive&&driftActive()&&driftScore){sprintf_s(text,"%u PTS",driftScore(slot));return;}
  if(phase==1&&combatActive&&combatActive()){
@@ -152,6 +168,11 @@ inline void Update(void* board,void* player){
  state.phase=state.display.Observe(mode==5&&combatActive&&combatActive(),values);
  auto profile=Read<void*>(reinterpret_cast<void*>(0x91CF90));auto settings=Read<void*>(profile,0x10);bool metric=Read<BYTE>(settings,0x3B)!=0;
  unsigned playerSlot=PlayerSlot(player,race,count);
+ const bool police=policeSide&&policeSide();
+ unsigned shown=count;
+ if(police){
+  shown=0;for(unsigned i=0;i<count;++i)if(order[i]!=playerSlot)order[shown++]=order[i];
+ }
  // Reuse the evaluated native fade/flip, retaining each clone's translation.
  // Set the same render-state dirty bit as FEObject_SetSize; colour alone leaves
  // extra names at full height while the original four collapse during a flip.
@@ -162,7 +183,8 @@ inline void Update(void* board,void* player){
    memcpy(d,s,28);memcpy(d+40,s+40,28);dst[7]|=0x400000;
   }
  }
- for(unsigned i=0;i<16;++i){auto row=state.rows[i];bool visible=i<count;
+ for(unsigned i=0;i<16;++i){auto row=state.rows[i];bool visible=i<shown;
+  if(police&&i<4)Show(Read<Object>(board,0x254+i*4),false);
   Show(row.name,visible);Show(row.rank,visible);Show(row.back,visible);if(!visible)continue;
   unsigned slot=order[i];auto info=race+0x18+slot*0x194;char text[96]{};
   Format(text,race,info,slot,playerSlot,mode,metric,state.phase);

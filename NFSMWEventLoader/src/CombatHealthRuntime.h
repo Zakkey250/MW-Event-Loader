@@ -2,6 +2,7 @@
 #include "CombatHealthPolicy.h"
 #include "CombatImpactPolicy.h"
 #include "HotPursuitPolicy.h"
+#include "../../integration/RpdWeaponPolicy.h"
 namespace combat_health_runtime {
 combat_health::Ledger ledger;
 unsigned generation=1;DWORD gameThread=0;bool installed=false,refused=false;
@@ -15,13 +16,14 @@ bool impactInstalled=false,impactRefused=false;
 bool nativeTypeGetterVerified=false;
 unsigned(*policeTarget)(unsigned)=nullptr;
 void(*policeDestroyed)(unsigned,unsigned)=nullptr;
+void(*speechSuspectContact)(unsigned,float,float)=nullptr;
 std::array<combat_impact::Contacts,16> impactContacts{};
 std::array<combat_impact::Motion,16> motions{};
 thread_local unsigned impactOwner=0,attackSource=0;
 bool(*isCross)(unsigned)=nullptr;
 void(*crossKilledByRacer)(unsigned,unsigned)=nullptr;
 
-struct Effect {unsigned damage=0,handle=0,kind=0;float original=0;bool used=false,nativePolice=false,policeSource=false;};
+struct Effect {unsigned damage=0,handle=0,kind=0;float original=0;bool used=false,nativePolice=false,policeSource=false,alliedAttack=false;};
 thread_local std::array<Effect,8> effects{};thread_local unsigned depth=0;
 template<class T>bool Read(unsigned p,T& out){return p>=0x10000&&Copy(reinterpret_cast<const void*>(p),&out,sizeof(out));}
 bool Native(unsigned damage,unsigned handle,unsigned* tableOut=nullptr){
@@ -34,6 +36,12 @@ bool Active(){
  unsigned race=0,play=0;if(!Read(0x91E000,race)||race<0x10000||!Read(race+0x1960,play)||play!=1)return false;
  auto p=event_race_policies::Current();return p&&mwcombat::Weapons(mwcombat::Parse(p->authoring.value("combatMode",std::string("none")).c_str()));
 }
+bool NativePursuit(){
+ unsigned flow=0,manager=0,pursuit=0,vt=0,query=0,finish=0,status=0;
+ return Read(0x925E90,flow)&&flow==6&&Read(0x993CC8,manager)&&manager&&Read(manager+0x130,pursuit)&&pursuit&&
+  Read(pursuit,vt)&&vt>=0x889000&&vt<0x900000&&Read(vt+12,query)&&query==0x433C90&&
+  Read(vt+0x114,finish)&&finish==0x433B60&&Read(pursuit+0x218,status)&&status<=1;
+}
 bool Participant(unsigned slot,unsigned handle){
  if(MWELGauntletParticipant(slot,handle))return true;
  auto race=*reinterpret_cast<BYTE**>(0x91E000);unsigned count=0,actual=0;
@@ -41,7 +49,9 @@ bool Participant(unsigned slot,unsigned handle){
 }
 void Write(unsigned slot){
  auto& binding=bindings[slot];auto& car=ledger.racers[slot];if(!Native(binding.damage,binding.handle))return;
- binding.written=1.f-car.Normalized();*reinterpret_cast<float*>(binding.damage+0x3C)=binding.written;
+ binding.written=1.f-car.Normalized();
+ const auto policy=event_race_policies::Current();
+ if(slot==0&&car.retired&&policy&&mwel_rpd::Armed(policy->authoring))binding.written=std::min(binding.written,.999999f);*reinterpret_cast<float*>(binding.damage+0x3C)=binding.written;
 }
 void Restore(){
  for(auto& b:bindings){float current=0;
@@ -58,6 +68,12 @@ void Notice(unsigned kind,unsigned handle,unsigned actor=0,unsigned amount=0){
  mwcombat::NoticeV1 value;value.eventKey=ledger.event;value.epoch=ledger.epoch;value.kind=kind;value.target=handle;value.actor=actor;value.reserved=amount;
  submit(&value,sizeof(value));
 }
+void Takedown(mwcombat::Takedown kind,unsigned actor,unsigned target){
+ if(!actor||!target||actor==target)return;
+ auto module=GetModuleHandleW(L"MWArmsAssist.asi");
+ const auto submit=module?reinterpret_cast<mwcombat::SubmitTakedown>(GetProcAddress(module,"MWAA_CombatTakedownV1")):nullptr;
+ if(submit)submit(unsigned(kind),actor,target);
+}
 // The native destruction event marks the racer totalled, runs the ordinary
 // loss message and opens ShowLosingPostRaceScreen. Never open a menu directly
 // or post it again while the script is already handling this participant.
@@ -68,8 +84,13 @@ bool Retire(unsigned slot){
  auto race=*reinterpret_cast<BYTE**>(0x91E000);unsigned nativeOutcome=0;BYTE finished=0;
  if(!Copy(race+0x18+slot*0x194+0x1C,&nativeOutcome,4)||nativeOutcome||
     !Copy(race+0x18+slot*0x194+0x21,&finished,1)||finished)return false;
+ const auto package=event_race_policies::Current();
+ // Hot Pursuit has one player car for the entire attempt. Its wreck uses
+ // the same native failure event as a wreck on the racer side.
+ if(slot==0&&package&&mwel_rpd::OfficerHandoff(package->authoring)&&MWELRpdOfficerDisabled(b.handle))return true;
  b.retirementSent=true;
- Notice(1,b.handle);
+ const bool suspectArrest=package&&mwel_rpd::ArmedSuspectSlot(package->authoring,slot,b.driver);
+ Notice(suspectArrest?2u:1u,b.handle);
  *reinterpret_cast<float*>(b.damage+0x3C)=.999999f;
  originalDestroy(reinterpret_cast<void*>(b.damage));b.written=1;
  Log("COMBAT_NATIVE_DEFEAT slot=%u handle=%08X player=%u native_destroy_event=1 direct_menu=0 arrest_scene_replaced=0",slot,b.handle,unsigned(b.driver==0));
@@ -148,7 +169,8 @@ bool RoadblockContact(unsigned other){
 }
 float PoliceContactScale(unsigned victimDriver,unsigned otherDriver){
  const auto policy=event_race_policies::Current();
- return hot_pursuit::PoliceContactScale(policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit",victimDriver,otherDriver);
+ return hot_pursuit::PoliceContactScale(policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit",
+  victimDriver,otherDriver,policy&&mwel_rpd::PoliceSprint(policy->authoring));
 }
 void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const ImpactVector* normal,float impulse,float auxiliary,unsigned surface,unsigned other){
  if(drift_race::Current()){
@@ -158,11 +180,15 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
  }
  const int slot=ImpactSlot(self);
  if(slot<0){
-  if(!installed||gameThread!=GetCurrentThreadId()||!Active()){originalImpact(self,point,normal,impulse,auxiliary,surface,other);return;}
-  const unsigned prior=attackSource;unsigned otherHandle=0,otherTable=0;
+  unsigned damageTable=0;
+  if(!installed||gameThread!=GetCurrentThreadId()||!Read(self+0x4C,damageTable)||damageTable!=0x8AD40C){originalImpact(self,point,normal,impulse,auxiliary,surface,other);return;}
+  const unsigned prior=attackSource;unsigned otherHandle=0,otherTable=0,driver=~0u;
   attackSource=0; // An environment contact must not inherit another hit's killer.
-  if(Read(other+8,otherHandle)&&Read(other+0x80,otherTable)&&otherTable==0x8AA828)
-   for(unsigned i=0;i<bindings.size();++i)if(bindings[i].handle==otherHandle&&Participant(i,otherHandle))attackSource=otherHandle;
+  if(other&&Read(other+8,otherHandle)&&Read(other+0x80,otherTable)&&otherTable==0x8AA828&&Read(other+0x114,driver)){
+   if(driver==0)attackSource=otherHandle; // The receiver verifies the actual local racer.
+   else if(driver==3&&ledger.event)for(unsigned i=1;i<bindings.size();++i)
+    if(bindings[i].handle==otherHandle&&Participant(i,otherHandle)){attackSource=otherHandle;break;}
+  }
   __try {originalImpact(self,point,normal,impulse,auxiliary,surface,other);}
   __finally {attackSource=prior;}
   return;
@@ -183,6 +209,7 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
   }
  }
  const bool exempt=breakable||roadblock;
+ if(speechSuspectContact&&binding.driver==3)speechSuspectContact(binding.handle,breakable&&impulse>1000?.1f:units,now);
  // Keep native zone/part/light damage. For this owned call alone, disable
  // only native total-health addition, whose one-shot totalled event would
  // otherwise bypass the 300-unit ledger. Specs remain shared and immutable.
@@ -208,7 +235,7 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
  const float contactScale=contactDriver==2?PoliceContactScale(binding.driver,contactDriver):1.f;
  const float charge=exempt?0:impactContacts[slot].Charge(other,otherHandle,now,units,ram.factor*contactScale);
  if(charge>0){ledger.racers[slot].Damage(combat_health::Hit::Collision,charge);
-  if(worldLogEnabled&&charge>=.01f)Log("COMBAT_COLLISION slot=%u handle=%08X units=%.3f impulse=%.3f mass=%.1f other=%08X hp=%.2f ram_attacker=%u closing_mps=%.2f role_scale=%.3f",unsigned(slot),binding.handle,charge,impulse,mass,other,ledger.racers[slot].remaining,unsigned(ram.attacker),ram.closing,ram.factor);
+  if(worldLogEnabled&&charge>=.01f)Log("COMBAT_COLLISION slot=%u handle=%08X units=%.3f impulse=%.3f mass=%.1f other=%08X hp=%.2f ram_attacker=%u closing_mps=%.2f role_scale=%.3f contact_scale=%.3f",unsigned(slot),binding.handle,charge,impulse,mass,other,ledger.racers[slot].remaining,unsigned(ram.attacker),ram.closing,ram.factor,contactScale);
  }
  if(breakable&&worldLogEnabled){static unsigned reported=0;if(reported++<16)Log("COMBAT_COLLISION_IGNORED slot=%u other=%08X reason=breakable_or_fragment native_visuals_preserved=1",unsigned(slot),other);}
  if(roadblock&&worldLogEnabled){static unsigned reported=0;if(reported++<16)Log("COMBAT_COLLISION_IGNORED slot=%u other=%08X reason=player_roadblock_contact native_physics_preserved=1",unsigned(slot),other);}
@@ -226,12 +253,16 @@ void __fastcall Destroy(void* self,void*){
   }
  }
  unsigned handle=0,sim=0,table=0;float before=1;
- const bool police=installed&&gameThread==GetCurrentThreadId()&&Active()&&Read(damage,table)&&table==0x8AD40C&&
+ const bool police=installed&&gameThread==GetCurrentThreadId()&&Read(damage,table)&&table==0x8AD40C&&
   Read(damage-0x18,sim)&&Read(sim+8,handle)&&Native(damage,handle)&&Read(damage+0x3C,before)&&before<1;
- const auto target=police&&policeTarget?policeTarget(handle):0;
- const auto attacker=attackSource;const bool cross=police&&attacker&&isCross&&isCross(handle);
+ const bool custom=police&&Active();
+ const auto target=custom&&policeTarget?policeTarget(handle):0;
+ const auto attacker=attackSource;const bool cross=custom&&attacker&&isCross&&isCross(handle);
  originalDestroy(self);
- float after=0;if(police&&Native(damage,handle)&&Read(damage+0x3C,after)&&after>=1){if(policeDestroyed)policeDestroyed(handle,target);if(cross&&crossKilledByRacer)crossKilledByRacer(handle,attacker);Notice(1,handle);}
+ float after=0;if(police&&Native(damage,handle)&&Read(damage+0x3C,after)&&after>=1){
+  Takedown(mwcombat::Takedown::PoliceWreck,attacker,handle);
+  if(custom){if(policeDestroyed)policeDestroyed(handle,target);if(cross&&crossKilledByRacer)crossKilledByRacer(handle,attacker);Notice(1,handle);}
+ }
 }
 bool EnsureImpact(){
  if(impactInstalled)return true;if(impactRefused)return false;
@@ -242,7 +273,8 @@ bool EnsureImpact(){
  impactInstalled=true;Log("EVENT_NATIVE_CONTACT_ACTIVE shared_owner=1 drift_without_weapons=1");return true;
 }
 void Frame(){
- if(!Active()){if(ledger.event)Restore();return;}
+ const bool event=Active();
+ if(!event){if(ledger.event)Restore();if(installed||refused||!NativePursuit())return;}
  gameThread=GetCurrentThreadId();
  if(!installed&&!refused){
   auto arms=GetModuleHandleW(L"MWArmsAssist.asi");using Ready=unsigned(__cdecl*)();
@@ -258,7 +290,7 @@ void Frame(){
   }
   installed=true;Log("COMBAT_HEALTH_ACTIVE racers_maximum=300 police_reference=100 transient=1 breakable_filter_verified=%u",unsigned(nativeTypeGetterVerified));
  }
- if(!installed)return;
+ if(!installed||!event)return;
  const auto key=MWELNeoCurrentKey();if(ledger.Observe(key,generation,true)){bindings={};impactContacts={};motions={};}
  float motionTime=0;Read(0x9885D8,motionTime);
  for(unsigned i=0;i<bindings.size();++i)if(bindings[i].damage&&Participant(i,bindings[i].handle)){
@@ -270,17 +302,24 @@ unsigned Query(unsigned slot,unsigned handle,mwcombat::HealthV1* out,unsigned si
  if(!out||size!=sizeof(*out)||!installed||!Active()||slot>=16||!ledger.event||!Participant(slot,handle))return 0;
  const auto& c=ledger.racers[slot];if(!c.occupied||c.handle!=handle)return 0;
  mwcombat::HealthV1 value;value.eventKey=ledger.event;value.epoch=ledger.epoch;value.handle=handle;value.slot=slot;
- value.remaining=c.remaining;value.maximum=c.maximum;value.flags=(c.retired?1u:0u)|(c.invincible?2u:0u);value.driver=bindings[slot].driver;*out=value;return 1;
+ // The RPD arrest ledger also retires healthy suspects. Publish that state
+ // through the existing health contract; consumers must not infer activity
+ // from a positive HP value or a still-present native racer alone.
+ value.remaining=c.remaining;value.maximum=c.maximum;value.flags=((c.retired||MWELRpdSprintRetired(handle)||MWELHotPursuitNormalRetired(handle))?1u:0u)|(c.invincible?2u:0u)|((MWELRpdSprintArresting(handle)||MWELHotPursuitAIArresting(handle))?mwcombat::ArrestPressure:0u);value.driver=bindings[slot].driver;*out=value;return 1;
 }
 unsigned Observe(unsigned slot,unsigned handle,unsigned damage,unsigned driver,mwcombat::HealthV1* out,unsigned size){
  unsigned table=0;
  auto current=event_race_policies::Current();
  const bool gauntletCop=slot==1&&driver==2&&current&&current->authoring.value("combatMode",std::string("none"))=="gauntlet";
+ const bool officer=slot==0&&driver==0&&current&&mwel_rpd::Armed(current->authoring);
  if(!out||size!=sizeof(*out)||!installed||gameThread!=GetCurrentThreadId()||!Active()||!Participant(slot,handle)||
-    (!gauntletCop&&driver!=0&&driver!=3)||!Native(damage,handle,&table)||(!gauntletCop&&table==0x8AD40C))return 0;
+    (!gauntletCop&&driver!=0&&driver!=3)||!Native(damage,handle,&table)||(!gauntletCop&&!officer&&table==0x8AD40C))return 0;
  const auto key=MWELNeoCurrentKey();if(ledger.Observe(key,generation,true)){bindings={};impactContacts={};motions={};}
  auto p=event_race_policies::Current();const bool immortal=driver!=0&&p->authoring.value("combatMode",std::string("none"))=="gauntlet";
- auto car=ledger.Join(slot,handle,false,immortal);if(!car)return 0;
+ const bool fresh=!ledger.racers[slot].occupied;
+ auto car=ledger.Join(slot,handle,officer&&mwel_rpd::OfficerHandoff(current->authoring),immortal);if(!car)return 0;
+ if(fresh&&officer){float raw=0;if(Read(damage+0x3C,raw)&&std::isfinite(raw))car->remaining=car->maximum*std::clamp(1.f-raw,0.f,1.f);}
+ if(fresh&&current&&mwel_rpd::ArmedSuspectSlot(current->authoring,slot,driver))car->remaining=car->maximum=current->authoring.at("policeSuspectHP").get<float>();
  auto& b=bindings[slot];
  if(b.damage!=damage||b.handle!=handle){float raw=0;if(!Read(damage+0x3C,raw)||!std::isfinite(raw))return 0;b={damage,handle,driver,raw,raw};impactContacts[slot]={};motions[slot]={};
   Log("COMBAT_HEALTH_JOIN slot=%u handle=%08X driver=%u maximum=%.0f remaining=%.1f",slot,handle,driver,car->maximum,car->remaining);
@@ -294,11 +333,27 @@ unsigned Effect(unsigned damage,unsigned handle,unsigned kind,unsigned phase,boo
   // Hot Pursuit's ordinary cops retain Arsenal/native damage and destruction.
   // The fixed combat HP model applies to racers, not to these police cars.
   auto policy=event_race_policies::Current();
-  const bool nativePolice=table==0x8AD40C&&policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit";
+  bool alliedAttack=false;
+  if(policy&&mwel_rpd::Armed(policy->authoring)){
+   unsigned sourceDriver=policeSource?2u:~0u,targetDriver=~0u;
+   for(const auto& b:bindings)if(b.handle==handle&&b.damage==damage)targetDriver=b.driver;
+   if(targetDriver==~0u&&table==0x8AD40C)targetDriver=2;
+   // Sources are set by the weapon adapter before entering the HP scope.
+   // Reject unknown/neutral attribution as well as police friendly fire.
+   if(attackSource){unsigned list=0,count=0;
+    if(Read(0x92CD1C,list)&&Read(0x92CD24,count)&&list&&count<=128)for(unsigned i=0;i<count;++i){unsigned car=0,vt=0,h=0;
+     if(Read(list+i*4,car)&&car&&Read(car,vt)&&vt==0x8AA828&&Read(car-0x78,h)&&h==attackSource){Read(car+0x94,sourceDriver);break;}
+    }
+   }
+   if(!mwel_rpd_weapons::Hostile(true,sourceDriver,targetDriver))return 0;
+   alliedAttack=sourceDriver==2&&targetDriver==3&&mwel_rpd::PoliceSprint(policy->authoring);
+  }
+  const bool boundOfficer=policy&&mwel_rpd::Armed(policy->authoring)&&bindings[0].damage==damage&&bindings[0].handle==handle;
+  const bool nativePolice=table==0x8AD40C&&!boundOfficer&&policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit";
   bool bound=table==0x8AD40C;
   for(unsigned i=0;i<bindings.size()&&!bound;++i)bound=bindings[i].damage==damage&&bindings[i].handle==handle&&Participant(i,handle);
   if(!bound)return 0;float raw=0;if(!Read(damage+0x3C,raw)||!std::isfinite(raw))return 0;
-  effects[depth++]={damage,handle,kind,raw,true,nativePolice,policeSource};return 1;
+  effects[depth++]={damage,handle,kind,raw,true,nativePolice,policeSource,alliedAttack};return 1;
  }
  if(!depth)return 0;const auto entry=effects[depth-1];
  if(entry.damage!=damage||entry.handle!=handle||entry.kind!=kind)return 0;
@@ -308,14 +363,15 @@ unsigned Effect(unsigned damage,unsigned handle,unsigned kind,unsigned phase,boo
  for(unsigned i=0;i<bindings.size();++i)if(bindings[i].damage==damage&&bindings[i].handle==handle&&Participant(i,handle)){
   const auto policy=event_race_policies::Current();
   const bool reduced=(entry.policeSource||policeSource)&&policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit";
-  ledger.racers[i].Damage(static_cast<combat_health::Hit>(kind),0,reduced?.75f:1.f);Write(i);
-  Log("COMBAT_HEALTH_HIT slot=%u handle=%08X kind=%u remaining=%.1f maximum=%.0f",i,handle,kind,ledger.racers[i].remaining,ledger.racers[i].maximum);
+  const float scale=(reduced?.75f:1.f)*(entry.alliedAttack?hot_pursuit::AlliedAttackScale:1.f);
+  ledger.racers[i].Damage(static_cast<combat_health::Hit>(kind),0,scale);Write(i);
+  Log("COMBAT_HEALTH_HIT slot=%u handle=%08X kind=%u remaining=%.1f maximum=%.0f damage_scale=%.3f allied_attack=%u",i,handle,kind,ledger.racers[i].remaining,ledger.racers[i].maximum,scale,unsigned(entry.alliedAttack));
   Retire(i);
   return 1;
  }
  unsigned table=0;if(!Native(damage,handle,&table)||table!=0x8AD40C){*reinterpret_cast<float*>(damage+0x3C)=entry.original;return 0;}
  const float raw=std::clamp(entry.original+combat_health::PoliceFraction(static_cast<combat_health::Hit>(kind)),0.f,1.f);
- if(raw>=1){Notice(1,handle);*reinterpret_cast<float*>(damage+0x3C)=std::min(entry.original,.999999f);originalDestroy(reinterpret_cast<void*>(damage));}
+ if(raw>=1){*reinterpret_cast<float*>(damage+0x3C)=std::min(entry.original,.999999f);Destroy(reinterpret_cast<void*>(damage),nullptr);}
  else *reinterpret_cast<float*>(damage+0x3C)=raw;
  return 1;
 }

@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 #include "NativeSaveFilter.h"
 #include "CarbonIntroPolicy.h"
+#include "EventPreviewStatsPolicy.h"
 #include "../../integration/EventLoaderPaths.h"
 #include "../../integration/MWCombatContract.h"
 #pragma comment(lib,"bcrypt.lib")
@@ -24,12 +25,32 @@ namespace fs=std::filesystem;
 using Json=nlohmann::json;
 // Optional editor switches are opt-in, even in older verified packages.
 inline bool Feature(const Json& event,const char* name){auto v=event.find(name);return v!=event.end()&&v->is_boolean()&&v->get<bool>();}
+// Interceptor free-run has no course objective. Other event modes keep the
+// normal start/checkpoint/finish contract.
+inline bool RpdFreeRun(const Json& e){return e.value("campaign",std::string())=="rpd"&&e.value("policeMission",std::string())=="interceptor"&&e.value("policeRule",std::string("freerun"))=="freerun";}
+inline bool RpdStartOnly(const Json& e){return RpdFreeRun(e)&&e.contains("gates")&&e.at("gates").is_array()&&e.at("gates").size()==1;}
+// Original MW prototype layout, authored in metres. No imported trajectory.
+// Legacy private drafts migrate to this layout without retaining HPR samples.
+inline Json RpdRacerStart(const Json& e){
+ const auto layout=e.value("policeStartLayout",std::string("MW_RPD_STANDARD_V1"));
+ if(layout!="MW_RPD_STANDARD_V1"&&!mwel_carbon::RpdScene(layout))throw std::runtime_error("RPD start layout");
+ auto start=e.at("gates").at(0);auto p=start.at("position");const double angle=start.at("rotation").get<double>()*3.14159265358979323846/180.;
+ const auto intro=e.value("carbonIntro",std::string());
+ double u=0,v=40,yaw=0;
+ if(intro=="HPR_INTERCEPTOR_ONLINE_10SEC"){u=-.35026061524887364;v=80.23511154740417;yaw=-.6006327013952324;}
+ if(intro=="HPR_INTERCEPTOR_HANG_TOUGH"){u=.37101468812240945;v=50.37788771987691;yaw=1.7018449080116227;}
+ if(intro=="HPR_INTERCEPTOR_NO_SLOWMO"){u=.9749354270640329;v=79.31227113410291;yaw=-.9424943444149392;}
+ start["position"]=Json::array({p.at(0).get<double>()+std::sin(angle)*u+std::cos(angle)*v,p.at(1).get<double>()-std::cos(angle)*u+std::sin(angle)*v,p.at(2).get<double>()});
+ start["rotation"]=start.at("rotation").get<double>()+yaw;return start;
+}
 inline bool NeoEnabled(const Json& event){auto v=event.find("aiRouteMode");return v!=event.end()&&v->is_string()&&*v=="yellow";}
 // Drift owns a police-free race, even when an imported package retains old
 // police or starting-heat values. Normalize the in-memory copy only.
 inline void ApplyFixedRaceRules(Json& event){
- if(event.value("combatMode",std::string("none"))=="drift"){
+ const auto mode=event.value("combatMode",std::string("none"));
+ if(mode=="drift"||mode=="touge"){
   event["cops"]=false;event["copDensity"]=0;event["startHeatLevel"]=nullptr;
+  if(mode=="touge")event["aiRouteMode"]="yellow";
  }
 }
 // Only circuit and knockout modes own laps. A copied authoring value must
@@ -115,7 +136,10 @@ inline EventPackage ParsePackage(const fs::path& directory){
  auto mode=authored.at("mode").get<std::string>();if(!modes.count(mode))throw std::runtime_error("Unsupported mode");
  if(authored.contains("combatMode")&&!authored.at("combatMode").is_string())throw std::runtime_error("Invalid combat mode type");
  const auto combat=mwcombat::Parse(authored.value("combatMode",std::string("none")).c_str());
- if(!mwcombat::Compatible(combat,mode.c_str(),unsigned(Integer(authored,"racerCount",1,16))))throw std::runtime_error("Combat mode and base race are incompatible");
+ if(combat==mwcombat::Mode::Touge&&(!authored.contains("worldCompatibility")||authored.at("worldCompatibility").value("kind",std::string())!="w2c"))throw std::runtime_error("Touge requires W2C world identity");
+ const auto nativeCount=unsigned(Integer(authored,"racerCount",1,16));
+ const bool rpdField=authored.value("campaign",std::string())=="rpd"&&authored.value("policeMission",std::string())=="hotpursuit";
+ if(!mwcombat::Compatible(combat,mode.c_str(),rpdField&&nativeCount>=3?nativeCount-1:nativeCount))throw std::runtime_error("Combat mode and base race are incompatible");
  if(authored.contains("combatAmmo")){
   const auto& ammo=authored.at("combatAmmo");if(!ammo.is_object()||ammo.size()>5)throw std::runtime_error("Invalid event ammunition");
   for(const auto& item:ammo.items()){
@@ -123,11 +147,26 @@ inline EventPackage ParsePackage(const fs::path& directory){
    if(!weapons.count(item.key()))throw std::runtime_error("Unknown event weapon");Integer(ammo,item.key().c_str(),0,mwcombat::AmmoLimit);
   }
  }
+ if(authored.contains("policeRacerWeapons")){
+  const auto& weapons=authored.at("policeRacerWeapons");
+  if(authored.value("campaign",std::string())!="rpd"||combat!=mwcombat::Mode::HotPursuit||!weapons.is_object()||weapons.size()>4)
+   throw std::runtime_error("Invalid RPD racer weapon settings");
+  for(const auto& item:weapons.items()){
+   const auto& row=item.value();
+   const auto known=std::any_of(std::begin(mwcombat::RacerWeaponNames),std::end(mwcombat::RacerWeaponNames),[&](auto name){return item.key()==name;});
+   if(!known||!row.is_object()||row.size()!=row.count("ammo")+row.count("cooldown"))throw std::runtime_error("Invalid RPD racer weapon");
+   if(row.contains("ammo"))Integer(row,"ammo",0,mwcombat::AmmoLimit);
+   if(row.contains("cooldown"))Integer(row,"cooldown",1,600);
+  }
+ }
  if(!Correction(authored)||!authored.contains("blacklistNo")||!authored.at("blacklistNo").is_null())Integer(authored,"blacklistNo",1,15);
  Integer(authored,"cashValue",0,INT_MAX);Integer(authored,"racerCount",1,16);Integer(authored,"laps",1,10);
  if(authored.contains("carbonIntro")&&!authored.at("carbonIntro").is_string())throw std::runtime_error("Invalid intro selection type");
  const auto intro=authored.value("carbonIntro",std::string("auto"));
  if(!mwel_carbon::Valid(intro,authored.at("racerCount").get<unsigned>()))throw std::runtime_error("Intro selection does not match participants");
+ if(mwel_carbon::RpdScene(intro)&&!(authored.value("campaign",std::string())=="rpd"&&authored.value("policeMission",std::string())=="interceptor"))throw std::runtime_error("Police rolling intro requires an Interceptor event");
+ const bool policeSprint=authored.value("campaign",std::string())=="rpd"&&authored.value("policeMission",std::string())=="hotpursuit"&&mode=="sprint"&&mwel_carbon::RpdSprintScene(intro);
+ if(mwel_carbon::HprScene(intro)&&!mwel_carbon::RpdScene(intro)&&!policeSprint&&(authored.value("campaign",std::string())=="rpd"||!mwel_carbon::HprRacerAllowed(intro,mode,authored.value("combatMode",std::string("none")))))throw std::runtime_error("HP intro is incompatible with this event mode");
  if(package.contains("carbonIntro")&&package.at("carbonIntro")!=intro)throw std::runtime_error("Intro selection mirror mismatch");
  if(mode=="lapknockout"&&authored.at("laps").get<int>()<std::max(1,authored.at("racerCount").get<int>()-1))throw std::runtime_error("Knockout laps must cover all eliminations");
  Number(authored,"traffic",0,100);Number(authored,"copDensity",0,100);
@@ -136,7 +175,8 @@ inline EventPackage ParsePackage(const fs::path& directory){
  if(!authored.at("cops").is_boolean())throw std::runtime_error("Police setting");
  if(mode=="tollboothrace")Number(authored,"timeLimit",.001,86400);
  if((mode=="circuit"||mode=="lapknockout")&&authored.at("loop")!=true)throw std::runtime_error("Loop required");
- const auto& gates=authored.at("gates");if(!gates.is_array()||gates.size()<2||gates.size()>258||gates.front().at("kind")!="start"||gates.back().at("kind")!="finish")throw std::runtime_error("Gate sequence");
+ const bool startOnly=RpdStartOnly(authored);
+ const auto& gates=authored.at("gates");if(!startOnly&&(!gates.is_array()||gates.size()<2||gates.size()>258||gates.front().at("kind")!="start"||gates.back().at("kind")!="finish"))throw std::runtime_error("Gate sequence");
  for(size_t index=1;index+1<gates.size();++index)if(gates[index].at("kind")!="checkpoint")throw std::runtime_error("Intermediate gate kind");
  std::set<std::string> names;unsigned starts=0,finishes=0;
  for(const char* field:{"gates","shortcuts","extras"}){
@@ -154,7 +194,16 @@ inline EventPackage ParsePackage(const fs::path& directory){
  }
  if(traps>16)throw std::runtime_error("Speed trap limit");
  if(mode=="speedtraprace"&&!traps)throw std::runtime_error("Speed trap points required");
- if(starts!=1||finishes!=1)throw std::runtime_error("Start/finish counts");
+ if(starts!=1||finishes!=(startOnly?0u:1u))throw std::runtime_error("Start/finish counts");
+ if(startOnly){
+  const auto racer=RpdRacerStart(authored);
+  if(!racer.is_object()||racer.value("kind",std::string())!="start")throw std::runtime_error("RPD racer start required");
+  const auto& p=racer.at("position");if(!p.is_array()||p.size()!=3)throw std::runtime_error("RPD racer start position");
+  for(const auto& n:p)if(!n.is_number()||!std::isfinite(n.get<double>())||std::abs(n.get<double>())>1000000)throw std::runtime_error("RPD racer start component");
+  Number(racer,"rotation",-360000,360000);
+  if(Feature(authored,"replaceMap")||!authored.value("route",Json::array()).empty()||!authored.value("shortcuts",Json::array()).empty()||!authored.value("extras",Json::array()).empty())throw std::runtime_error("RPD free-run must not carry a race course or map replacement");
+ }
+
  ApplyFixedRaceRules(result.authoring);return result;
 }
 inline void AtomicWrite(const fs::path& destination,const std::string& bytes){
@@ -166,7 +215,7 @@ inline void AtomicWrite(const fs::path& destination,const std::string& bytes){
  CloseHandle(file);if(ok)ok=MoveFileExW(temporary.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;
  if(!ok){DeleteFileW(temporary.c_str());throw std::runtime_error("Sidecar commit failed");}
 }
-struct FinishEvidence {bool nativeGoalCrossed=false,forcedRaceEnd=false;unsigned place=0;double elapsedSeconds=0,score=0;bool armsSurvivalVictory=false;};
+struct FinishEvidence {bool nativeGoalCrossed=false,forcedRaceEnd=false;unsigned place=0;double elapsedSeconds=0,score=0;bool armsSurvivalVictory=false;event_preview_stats::Finish preview;bool interceptorVictory=false;double topSpeedMps=0;};
 class ProfileSidecar {
  fs::path path;std::string profileKey;Json records=Json::object();
  public:
@@ -180,7 +229,8 @@ class ProfileSidecar {
  }
  bool Record(const EventPackage& event,const FinishEvidence& finish){
   const bool survival=finish.armsSurvivalVictory&&event.authoring.value("combatMode",std::string("none"))=="armsrace"&&finish.place==1;
-  if(!EventId(event.id)||!event.revision||(!finish.nativeGoalCrossed&&!survival)||finish.forcedRaceEnd||finish.place<1||finish.place>16||
+  const bool interceptor=finish.interceptorVictory&&event.authoring.value("campaign",std::string())=="rpd"&&event.authoring.value("policeMission",std::string())=="interceptor"&&event.authoring.value("combatMode",std::string())=="hotpursuit"&&finish.place==1;
+  if(!EventId(event.id)||!event.revision||(!finish.nativeGoalCrossed&&!survival&&!interceptor)||finish.forcedRaceEnd||finish.place<1||finish.place>16||
      !std::isfinite(finish.elapsedSeconds)||finish.elapsedSeconds<=0||!std::isfinite(finish.score)||finish.score<0)return false;
   auto candidate=records;auto key=event.id+":"+std::to_string(event.revision);auto& row=candidate[key];
   if(row.is_null())row=Json::object();
@@ -191,6 +241,36 @@ class ProfileSidecar {
    row["bestSeconds"]=std::min(row.value("bestSeconds",finish.elapsedSeconds),finish.elapsedSeconds);
    row["bestScore"]=std::max(row.value("bestScore",finish.score),finish.score);
   }
+  if(interceptor){row["interceptorWins"]=row.value("interceptorWins",uint64_t(0))+1;row["completed"]=true;}
+  if(std::isfinite(finish.topSpeedMps)&&finish.topSpeedMps>0&&finish.topSpeedMps<250)row["topSpeedMps"]=std::max(row.value("topSpeedMps",0.),finish.topSpeedMps);
+  const auto mode=event.authoring.value("combatMode",std::string("none"));
+  if(finish.nativeGoalCrossed&&mode=="drift"&&finish.preview.drift&&event_preview_stats::ValidAngle(finish.preview.angle)){
+   auto& stats=row["previewDrift"];if(stats.is_null())stats=Json::object();
+   stats["bestAngle"]=std::max(stats.value("bestAngle",0.),finish.preview.angle);
+   stats["bestPoints"]=std::max(stats.value("bestPoints",0.),finish.score);
+  }
+  if(finish.nativeGoalCrossed&&mode=="hotpursuit"&&finish.preview.hotPursuit&&event_preview_stats::ValidHot(finish.preview.survivors,finish.place)){
+   auto& stats=row["previewHotPursuit"];if(stats.is_null())stats=Json::object();
+   stats["mostSurvivors"]=event_preview_stats::BestSurvivors(stats.value("mostSurvivors",0u),finish.preview.survivors);
+   stats["bestPlace"]=event_preview_stats::BestPlace(stats.value("bestPlace",0u),finish.place);
+  }
+  Json saved{{"schema",1},{"profileKeyHash",Digest(profileKey)},{"records",candidate},{"payloadSha256",Digest(candidate.dump())}};
+  AtomicWrite(path,saved.dump()+"\n");records=std::move(candidate);return true;
+ }
+ // A police sprint is evaluated by arrest count, without a career win/loss.
+ // The runtime calls this only after its completed roster and native result
+ // are confirmed. Keep these statistics separate from course goal evidence.
+ bool RecordRpdArrests(const EventPackage& event,unsigned arrested,unsigned suspects){
+  const auto& a=event.authoring;
+  if(!EventId(event.id)||!event.revision||a.value("campaign",std::string())!="rpd"||
+     a.value("combatMode",std::string())!="hotpursuit"||a.value("policeMission",std::string())!="hotpursuit"||
+     a.value("policeRule",std::string())!="sprint"||a.value("mode",std::string())!="sprint"||
+     a.value("racerCount",0u)!=suspects+1||!event_preview_stats::ValidArrests(arrested,suspects))return false;
+  auto candidate=records;auto& stats=candidate[Key(event)]["previewRpdHotPursuit"];
+  if(stats.is_null()||!stats.is_object()||stats.value("suspects",0u)!=suspects)stats=Json::object();
+  auto previous=stats.value("mostArrested",0u);
+  stats["mostArrested"]=std::max(previous<=suspects?previous:0u,arrested);stats["suspects"]=suspects;
+  if(candidate==records)return false;
   Json saved{{"schema",1},{"profileKeyHash",Digest(profileKey)},{"records",candidate},{"payloadSha256",Digest(candidate.dump())}};
   AtomicWrite(path,saved.dump()+"\n");records=std::move(candidate);return true;
  }
@@ -214,6 +294,27 @@ class ProfileSidecar {
   output={words[0],words[1],words[2],words[3]};return true;
  }
  const Json& Records()const{return records;}
+ event_preview_stats::Record Preview(const EventPackage& event)const{
+  event_preview_stats::Record result;auto row=records.find(Key(event));if(row==records.end())return result;
+  auto drift=row->find("previewDrift");
+  if(drift!=row->end()&&drift->is_object()){
+   double angle=drift->value("bestAngle",-1.),points=drift->value("bestPoints",-1.);
+   if(event_preview_stats::ValidAngle(angle)&&std::isfinite(points)&&points>=0&&points<=10000000){result.drift=true;result.angle=angle;result.points=unsigned(points);}
+  }
+  auto hot=row->find("previewHotPursuit");
+  if(hot!=row->end()&&hot->is_object()){
+   auto survivors=hot->value("mostSurvivors",0u),place=hot->value("bestPlace",0u);
+   if(event_preview_stats::ValidHot(survivors,place)){result.hotPursuit=true;result.survivors=survivors;result.place=place;}
+  }
+  auto police=row->find("previewRpdHotPursuit");
+  if(police!=row->end()&&police->is_object()){
+   auto arrested=police->value("mostArrested",~0u),suspects=police->value("suspects",0u);
+   if(event_preview_stats::ValidArrests(arrested,suspects)&&event.authoring.value("racerCount",0u)==suspects+1){
+    result.policeSprint=true;result.arrested=arrested;result.suspects=suspects;
+   }
+  }
+  return result;
+ }
  const fs::path& Path()const{return path;}
 };
 }

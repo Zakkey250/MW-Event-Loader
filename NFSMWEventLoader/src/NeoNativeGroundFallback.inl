@@ -78,7 +78,7 @@ void MWELNeoGroundFrame(){
  // world loading is complete. ASI initialization must not intercept the
  // native loading allocator's ground/stream queries or race its setup.
  static bool attempted=false;
- if(attempted||!MWELNeoDriverInstalled()||*reinterpret_cast<unsigned*>(0x925E90)!=6||!MWELNeoCourseEnabled())return;
+ if(attempted||!MWELNeoDriverInstalled()||*reinterpret_cast<unsigned*>(0x925E90)!=6||(!MWELNeoCourseEnabled()&&!MWELRpdFreeRunVehicle()))return;
  attempted=true;auto ok=MWELInstallNeoGroundFallback();
  if(MWELNeoLoggingEnabled())MWELNeoLog(ok?"EVENT_NEOAI_NATIVE_GROUND_ACTIVE game_frame=1 loading_complete=1":"EVENT_NEOAI_NATIVE_GROUND_FALLBACK_DISABLED original_native_queries=1");
 }

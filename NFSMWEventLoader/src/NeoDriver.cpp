@@ -13,6 +13,7 @@
 #include <intrin.h>
 #include <NFSPluginSDK/Game.MW05/Types/FECustomizationRecord.h>
 #include <NFSPluginSDK/Game.MW05/Types/AIVehicle.h>
+#include <NFSPluginSDK/Game.MW05/Types/IVehicle.h>
 #include <NFSPluginSDK/Game.MW05/Types/Attrib/Gen/pvehicle.h>
 #include <NFSPluginSDK/Game.MW05/Types/Physics.h>
 #include "DifficultySettings.h"
@@ -20,6 +21,14 @@
 #include "DriftCurvePolicy.h"
 void MWELNeoLog(const char* text);
 bool MWELNeoDetailedLoggingEnabled();
+bool MWELRpdManualDriving(void*);
+bool MWELRpdNOSWrite(void*,bool,unsigned);
+void MWELRpdObserveInput(void*,unsigned,float,unsigned);
+bool MWELRpdNativePlacementAllowed(void*);
+bool MWELRpdSprintRecoveryHeld(unsigned handle);
+bool MWELRpdRaceMode();
+bool MWELRpdSprintLocked(unsigned);
+bool MWELRpdRetiredDriving(void*);
 namespace event_neo_driver {
 enum class LogLevel{Info,Warning,Error};
 void Log(LogLevel,const char* format,...){if(!MWELNeoDetailedLoggingEnabled())return;char text[8192];va_list args;va_start(args,format);vsnprintf_s(text,sizeof(text),_TRUNCATE,format,args);va_end(args);MWELNeoLog(text);}
@@ -38,14 +47,28 @@ bool W2CRaceVehicle(void* ai,VehicleSnapshot& racer,VehicleSnapshot&,bool local,
 }
 bool W2CReleaseNativeQuery(void* ai){void* nav=nullptr;if(!AudioRead(static_cast<BYTE*>(ai)+0x24,&nav)||!nav)return false;const BYTE guard[]={0x56,0x8B,0xF1};if(memcmp(reinterpret_cast<void*>(0x770060),guard,sizeof(guard)))return false;reinterpret_cast<void(__thiscall*)(void*)>(0x770060)(nav);return true;}
 
+// Recovery validates a landing and its onward road synchronously. Spread
+// concurrent RPD attempts across frames without resetting any car's jam age.
+bool NeoRpdRecoverySlot(const void* race,ULONGLONG now){
+ static thread_local const void* owner=nullptr;
+ static thread_local ULONGLONG next=0;
+ if(owner!=race){owner=race;next=0;}
+ if(now<next)return false;
+ next=now+100;
+ return true;
+}
 #include "NeoActuators.inl"
 }
 bool MWELInstallNeoDriver(){event_neo_driver::InstallNeoAI();return event_neo_driver::neoInstalled;}
 bool MWELNeoDriverInstalled(){return event_neo_driver::neoInstalled;}
 bool MWELNeoGroundManagerOwned(const void* manager){
  using namespace event_neo_driver;
- if(!manager||!neoInstalled||*reinterpret_cast<unsigned*>(0x925E90)!=6||!MWELNeoCourseEnabled())return false;
+ if(!manager||!neoInstalled||*reinterpret_cast<unsigned*>(0x925E90)!=6)return false;
  unsigned worldId=0;if(!AudioRead(static_cast<const BYTE*>(manager)+0x90,&worldId)||!worldId)return false;
+ if(auto target=MWELRpdFreeRunVehicle()){unsigned actual=0;
+  if(AudioRead(static_cast<const BYTE*>(target)-0x20,&actual)&&actual==worldId)return true;
+ }
+ if(!MWELNeoCourseEnabled())return false;
  auto race=*reinterpret_cast<void**>(0x91E000);auto now=GetTickCount64();
  for(const auto& row:neoRuntime)if(row.owned&&row.race==race&&now-row.activeAt<250){
   BYTE* vehicle=nullptr;unsigned actual=0;
@@ -55,8 +78,14 @@ bool MWELNeoGroundManagerOwned(const void* manager){
 }
 bool MWELNeoGroundQueryAllowed(const float* point){
  using namespace event_neo_driver;
- if(!point||!neoInstalled||*reinterpret_cast<unsigned*>(0x925E90)!=6||!MWELNeoCourseEnabled())return false;
+ if(!point||!neoInstalled||*reinterpret_cast<unsigned*>(0x925E90)!=6)return false;
  mwneo::Point p{point[0],point[1],point[2]};if(!mwneo::Finite(p))return false;
+ if(auto target=MWELRpdFreeRunVehicle()){
+  const auto& at=static_cast<NFSPluginSDK::MW05::IVehicle*>(target)->GetPosition();
+  mwneo::Point center{at.x,at.y,at.z};
+  if(mwneo::Finite(center)&&mwneo::LengthXZ(mwneo::Sub(p,center))<10&&std::abs(p.y-center.y)<6)return true;
+ }
+ if(!MWELNeoCourseEnabled())return false;
  if(neoPlacementPoint){mwneo::Point target{neoPlacementPoint[0],neoPlacementPoint[1],neoPlacementPoint[2]};return mwneo::LengthXZ(mwneo::Sub(p,target))<8&&std::abs(p.y-target.y)<6;}
  auto now=GetTickCount64();auto race=*reinterpret_cast<void**>(0x91E000);
  for(const auto& row:neoRuntime)if(row.owned&&row.race==race&&now-row.activeAt<250&&row.groundExtent>0&&

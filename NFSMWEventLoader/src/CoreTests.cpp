@@ -2,7 +2,9 @@
 #include "WorldCompatibility.h"
 #include "NativeCashValue.h"
 #include "NeoObstacleFile.h"
+#include "TougeFallPolicy.h"
 #include "../../integration/MWRaceBarrierPolicy.h"
+#include "NativeRaceGuardGroups.h"
 #include "../../integration/MWNativeSpeechPolicy.h"
 #include <iostream>
 #include <set>
@@ -10,6 +12,18 @@
 static void Check(bool ok,const char* label){if(!ok)throw std::runtime_error(label);}
 int wmain(int argc,wchar_t** argv){
  try{
+  {
+   using namespace touge_fall_policy;Gate gate{{0,0,0},40,20,0};
+   Check(Continuous({0,0,0},{40,0,0})&&!Continuous({0,0,0},{0,0,-100}),"Respawn continuity guard");
+   Check(DownCrossing(gate,{0,0,10},{0,0,-10}),"Downward horizontal gate miss");
+   Check(!DownCrossing(gate,{0,0,-10},{0,0,10}),"Upward gate contact crashed");
+   Check(!DownCrossing(gate,{21,0,10},{21,0,-10}),"Outside rectangle crashed");
+   Check(!DownCrossing(gate,{0,0,100},{0,0,-100}),"Respawn warp became a fall");
+   Check(DownCrossing(gate,{-30,0,10},{30,0,-10}),"Swept high-speed gate contact missed");
+   Check(!DownCrossing(gate,{0,0,-12},{0,0,-14}),"Lower road triggered upper plane");
+   Check(BelowRoad(100,87,-3,20)&&!BelowRoad(100,101,-3,20)&&!BelowRoad(100,87,0,20),"Cliff fall policy");
+   Check(mwcombat::Parse("touge")==mwcombat::Mode::Touge&&!mwcombat::Weapons(mwcombat::Mode::Touge),"Touge mode identity");
+  }
   for(const char* name:{"replaceMap","nativeOpponentAssist","checkpointsVisible"}){
    Check(!mwel::Feature(mwel::Json::object(),name),"Omitted feature enabled");
    for(auto v:{mwel::Json(nullptr),mwel::Json(false),mwel::Json(1),mwel::Json("true")})Check(!mwel::Feature({{name,v}},name),"Non-true feature enabled");
@@ -35,6 +49,13 @@ int wmain(int argc,wchar_t** argv){
   }
   Check(mwel_carbon::Valid("INTRO99NG02",8)&&!mwel_carbon::Valid("../INTRO01NG02",8),"Unavailable intro accepted");
   Check(!mwel_carbon::Matches("INTRO04NG02","INTRO05NG02",8,8)&&mwel_carbon::Matches("INTRO04NG02","INTRO04NG02",8,8),"Explicit intro selection changed");
+  for(auto name:{"HPR_INTERCEPTOR_ONLINE_10SEC","HPR_INTERCEPTOR_NO_SLOWMO","HPR_INTERCEPTOR_HANG_TOUGH","HPR_RACE_ROLLING_2","HPR_RACE_ALIGN_8","HPR_RACE_ALIGN_ONLINE_8","HPR_RACE_DRIVE_ONLINE_8"}){
+   const auto count=mwel_carbon::Participants(name);
+   Check(count==2||count==8,"HP scene field size missing");
+   Check(mwel_carbon::Valid(name,count)&&!mwel_carbon::Valid(name,count+1),"HP scene field mismatch accepted");
+   Check(!mwel_carbon::Matches("auto",name,count,count)&&mwel_carbon::Matches(name,name,count,count),"HP scene became an automatic intro");
+  }
+  Check(mwel_carbon::HprRaceMode("sprint")&&mwel_carbon::HprRaceMode("circuit")&&!mwel_carbon::HprRaceMode("drag")&&!mwel_carbon::HprRaceMode("tollboothrace"),"HP race intro mode policy");
    Check(mwel_carbon::Valid("UG2_INTRONIS20",6)&&!mwel_carbon::Valid("UG2_INTRONIS20",4)&&!mwel_carbon::Valid("UG2_INTRONIS20",12),"UG2 six-car scene field mismatch");
    Check(mwel_carbon::Valid("UG2_INTRONIS08",4)&&mwel_carbon::Valid("UG2_INTRONIS09",4)&&mwel_carbon::Valid("UG2_INTRONIS14",2),"Unavailable UG2 intro accepted");
    std::cout<<"CARBON_SELECTION_PASS auto/native, exact names and participant validation\n";
@@ -53,6 +74,22 @@ int wmain(int argc,wchar_t** argv){
   Check(!mw_race_barriers::Collides(512,{2,mw_race_barriers::UnknownDriver,0}),"Native barrier exclusion lost");
   Check(mw_race_barriers::Collides(512,{1,mw_race_barriers::UnknownDriver,0}),"Unrelated native exclusion removed guard");
   Check(mw_race_barriers::Collides(512,{}),"Unknown owner disabled event guard");
+  {
+   using namespace mwel_native_guards;
+   std::vector<unsigned char> bytes(8+60);auto put=[&](size_t o,unsigned v,size_t n){memcpy(bytes.data()+o,&v,n);};
+   put(0,0x34109,4);put(4,60,4);
+   put(16,Key("BARRIER_SPLINE_730"),4);put(20,730,2);
+   put(36,Key("SHOP_GARAGE"),4);put(40,731,2);
+   put(56,Key("BARRIER_SPLINE_07"),4);put(60,732,2);
+   auto groups=Decode(bytes);
+   Check(!Retain(730,groups,true)&&!Retain(732,groups,true),"Named native closures retained for RPD officer");
+   Check(Retain(0,groups,true)&&Retain(731,groups,true)&&Retain(4096,groups,true),"Native floor, scenery or unknown group removed");
+   Check(Retain(730,groups,false),"Native closure filtering escaped verified officer query");
+   bool refused=false;auto truncated=bytes;truncated.pop_back();try{Decode(truncated);}catch(...){refused=true;}Check(refused,"Truncated native groups accepted");
+   refused=false;auto invalid=bytes;invalid[20]=0xff;invalid[21]=0xff;try{Decode(invalid);}catch(...){refused=true;}Check(refused,"Invalid native group index accepted");
+   std::cout<<"NATIVE_GUARD_GROUP_POLICY_PASS named_closures_only=1 world_and_unknown_retained=1 officer_scope=1 bounded_records=1\n";
+  }
+
   {
    unsigned char manager[0x98]{},body[0x180]{};auto vehicle=body+0x40;
    auto write=[](void* target,unsigned value){memcpy(target,&value,4);};
@@ -109,6 +146,77 @@ int wmain(int argc,wchar_t** argv){
    std::cout<<"NEO_OPTIONAL_OBSTACLES_PASS absent=1 declared_missing_rejected=1 valid=1 corrupt_rejected=1\n";
   }
   mwel::ProfileSidecar alice(root,"test-installation/profile-A"),bob(root,"test-installation/profile-B");
+  {
+   auto mission=package;mission.revision+=120;
+   mission.authoring["campaign"]="rpd";mission.authoring["policeMission"]="interceptor";mission.authoring["combatMode"]="hotpursuit";
+   mwel::FinishEvidence arrest{false,false,1,37.25,0};arrest.interceptorVictory=true;arrest.topSpeedMps=55.5;
+   Check(alice.Record(mission,arrest),"Native arrest without course goal refused");
+   auto bad=arrest;bad.forcedRaceEnd=true;Check(!alice.Record(mission,bad),"Forced arrest saved");
+   bad=arrest;bad.place=2;Check(!alice.Record(mission,bad),"Escaped suspect saved as mission win");
+   auto ordinary=mission;ordinary.authoring["campaign"]="racer";Check(!alice.Record(ordinary,arrest),"Arrest bypassed racer goal proof");
+   ordinary=mission;ordinary.authoring["policeMission"]="rapidresponse";Check(!alice.Record(ordinary,arrest),"Wrong mission accepted arrest proof");
+   arrest.elapsedSeconds=40;arrest.topSpeedMps=60;Check(alice.Record(mission,arrest),"Second arrest refused");
+   mwel::ProfileSidecar disk(root,"test-installation/profile-A");auto id=mwel::ProfileSidecar::Key(mission);const auto& r=disk.Records().at(id);
+   Check(r.at("completed")==true&&r.at("interceptorWins")==2&&r.at("attempts")==2,"Arrest completion/counters did not survive reload");
+   Check(r.at("bestSeconds")==37.25&&r.at("topSpeedMps")==60,"Mission time/speed maxima lost on reload");
+   Check(!bob.Records().contains(id),"Mission completion crossed profiles");
+   std::cout<<"RPD_PROGRESS_PASS native arrest; no fake goal; loss/forced/wrong mission refused; disk reload; speed/time; profile isolation\n";
+  }
+  {
+   auto drift=package;drift.revision+=110;drift.authoring["combatMode"]="drift";
+   auto hot=package;hot.revision+=111;hot.authoring["combatMode"]="hotpursuit";
+   mwel::FinishEvidence first{true,false,3,100,12000};first.preview={true,false,42.5,0};
+   Check(alice.Record(drift,first),"Preview Drift finish refused");
+   auto second=first;second.place=2;second.score=9000;second.preview.angle=65;
+   Check(alice.Record(drift,second),"Preview second Drift finish refused");
+   auto bad=second;bad.forcedRaceEnd=true;bad.score=999999;bad.preview.angle=79;
+   Check(!alice.Record(drift,bad),"Forced Drift finish supplied a preview record");
+   mwel::FinishEvidence survivor{true,false,4,120,0};survivor.preview={false,true,0,6};
+   Check(alice.Record(hot,survivor),"Preview Hot Pursuit survivor refused");
+   survivor.place=2;survivor.preview.survivors=1;
+   Check(alice.Record(hot,survivor),"Preview Hot Pursuit placement refused");
+   mwel::ProfileSidecar reread(root,"test-installation/profile-A");
+   auto d=reread.Preview(drift),h=reread.Preview(hot);
+   Check(d.drift&&d.angle==65&&d.points==12000&&!d.hotPursuit,"Drift angle/points did not retain independent maxima");
+   Check(h.hotPursuit&&h.survivors==6&&h.place==2&&!h.drift,"Hot Pursuit maxima/minimum rank came from the same attempt");
+   Check(event_preview_stats::Angle(d)==L"65.0\u00b0"&&event_preview_stats::Points(d)==L"12000 Pts","Drift record formatting failed");
+   Check(event_preview_stats::Hot(h,true)==L"6\u53f0 / 2\u4f4d"&&event_preview_stats::Hot(h,false)==L"6 cars / #2","Hot Pursuit merged display failed");
+   Check(!bob.Preview(drift).drift&&!bob.Preview(hot).hotPursuit,"Preview records crossed profile identities");
+   auto revision=drift;++revision.revision;Check(!reread.Preview(revision).drift,"Preview records crossed event revisions");
+   Check(event_preview_stats::Angle({})==L"--"&&event_preview_stats::Points({})==L"--"&&event_preview_stats::Hot({},true)==L"-- / --","Missing records fabricated values");
+   Check(!event_preview_stats::ValidAngle(NAN)&&!event_preview_stats::ValidAngle(81)&&!event_preview_stats::ValidHot(0,1)&&!event_preview_stats::ValidHot(2,17),"Invalid preview metrics accepted");
+   const auto hotKey=mwel::ProfileSidecar::Key(hot);
+   auto before=reread.Records().at(hotKey);(void)reread.Preview(hot);
+   Check(reread.Records().at(hotKey)==before&&!before.contains("nativeProgress"),"Preview lookup rewrote completion data");
+   std::cout<<"PREVIEW_STATS_PASS independent records, genuine finishes, profiles, revisions, missing values, Japanese/English display, read-only lookup\n";
+  }
+  {
+   auto sprint=package;sprint.revision+=121;
+   sprint.authoring["campaign"]="rpd";sprint.authoring["policeMission"]="hotpursuit";
+   sprint.authoring["combatMode"]="hotpursuit";sprint.authoring["policeRule"]="sprint";
+   sprint.authoring["mode"]="sprint";sprint.authoring["racerCount"]=9;
+   const auto id=mwel::ProfileSidecar::Key(sprint);
+   Check(event_preview_stats::Arrests(alice.Preview(sprint),8)==L"--/8","Unplayed police sprint fabricated an arrest record");
+   Check(alice.RecordRpdArrests(sprint,0,8),"Zero-arrest police sprint was not recorded");
+   Check(event_preview_stats::Arrests(alice.Preview(sprint),8)==L"0/8","Played zero arrests indistinguishable from unplayed");
+   Check(alice.RecordRpdArrests(sprint,4,8),"Improved police sprint record was not saved");
+   Check(!alice.RecordRpdArrests(sprint,2,8)&&!alice.RecordRpdArrests(sprint,4,8),"Lower/equal police sprint rewrote best record");
+   Check(!alice.RecordRpdArrests(sprint,9,8)&&!alice.RecordRpdArrests(sprint,4,7),"Invalid arrest count/roster accepted");
+   auto ordinary=sprint;ordinary.authoring["campaign"]="racer";
+   Check(!alice.RecordRpdArrests(ordinary,8,8),"Racer event supplied police arrest record");
+   ordinary=sprint;ordinary.authoring["policeMission"]="interceptor";
+   Check(!alice.RecordRpdArrests(ordinary,8,8),"Interceptor supplied sprint arrest record");
+   mwel::ProfileSidecar disk(root,"test-installation/profile-A");
+   auto record=disk.Preview(sprint);Check(record.policeSprint&&record.arrested==4&&record.suspects==8,"Police sprint record lost on disk reload");
+   Check(event_preview_stats::Arrests(record,8)==L"4/8","Arrest numerator/denominator display incorrect");
+   Check(!disk.Records().at(id).contains("wins")&&!disk.Records().at(id).contains("completed")&&!disk.Records().at(id).contains("bestSeconds"),"Arrest statistics fabricated a win/completion/time");
+   Check(!bob.Preview(sprint).policeSprint,"Police sprint records crossed profiles");
+   auto newer=sprint;++newer.revision;Check(!disk.Preview(newer).policeSprint,"Police sprint records crossed revisions");
+   newer=sprint;newer.authoring["racerCount"]=7;
+   Check(!disk.Preview(newer).policeSprint&&event_preview_stats::Arrests(record,6)==L"--/6","Changed roster reused an incompatible denominator");
+   Check(alice.RecordRpdArrests(sprint,8,8),"Full arrest record refused");
+   std::cout<<"RPD_PREVIEW_ARRESTS_PASS zero/improved/lower/equal/invalid; disk persistence; no career win; profiles/revisions/rosters; count formatting\n";
+  }
   mwel::FinishEvidence finish{true,false,1,105.5,0};
   Check(alice.Record(package,finish),"Valid finish refused");
   finish.nativeGoalCrossed=false;Check(!alice.Record(package,finish),"False goal accepted");

@@ -13,6 +13,7 @@ bool Active(){unsigned race=0,play=0;
 }
 void* queryTrampoline=nullptr;
 bool __fastcall PursuitPresentation(void* params,void*){
+ if(MWELRpdHotPursuitScope())return false;
  const bool native=reinterpret_cast<bool(__thiscall*)(void*)>(0x5FBE70)(params);
  return native||Active();
 }
@@ -39,7 +40,7 @@ void Filter(void* element){
 }
 void __fastcall BoardUpdate(void* self,void*,void* player){boardUpdate(self,player);Filter(self);}
 void __fastcall InfoUpdate(void* self,void*,void* player){
- infoUpdate(self,player);Filter(self);
+ infoUpdate(self,player);Filter(self);MWELRpdInfo(self);rpd_pursuit_presentation::Colors(self);
  if(Active()&&worldLogEnabled){
   unsigned race=0;int booths=0,cp=0;
   if(gauntlet_runtime::Read(0x91E000,race)&&gauntlet_runtime::Read(race+0x18+0x30,booths)&&gauntlet_runtime::Read(race+0x18+0x2C,cp)){
@@ -50,6 +51,11 @@ void __fastcall InfoUpdate(void* self,void*,void* player){
 
 unsigned long long Desired(unsigned long long requested){
  auto actual=requested;
+ // Hud_TimeExtension's stock warning updater is feature 25. Interceptor
+ // already has a native TimeLimit but its Sprint-based HUD omits this bit.
+ // Respect zero masks during pause/NIS/loading/results.
+ if(requested&&rpd_pursuit_presentation::Interceptor())actual|=1ull<<25;
+ if(MWELRpdHotPursuitScope())return actual&~(Bottom|PursuitBoard);
  if(Active()){
   actual&=~(PursuitBoard|(hot_pursuit_runtime::Current()?0ull:24ull)); // retain the HP race leaderboard and native race values
   unsigned race=0;BYTE racing=0,timer=0;
@@ -65,8 +71,15 @@ void __fastcall Features(void* self,void*,unsigned long long requested){
  }}
  original(self,actual);
  hot_pursuit_radar::FeaturesChanged(actual);checkpoint_display::FeaturesChanged(actual);
+ // Restart dispatches SetFeatures while FEngHud still contains addresses
+ // of the previous race's elements. Native initialization replaces them
+ // later; do not inspect or update those borrowed elements in that interval.
+ // Frame() reconciles the mask after streaming and the race timer are live.
+ unsigned race=0;BYTE loading=1;
+ if(!combat_health_runtime::Racing()||!gauntlet_runtime::Read(0x91E000,race)||
+    !gauntlet_runtime::Read(race+0x195C,loading)||loading)return;
  if(Active()&&actual){
-  for(unsigned offset:{0x300u,0x308u,0x324u}){
+  for(unsigned offset:{0x300u,0x308u,0x30Cu,0x324u}){
    auto element=expanded_leaderboard::Read<void*>(self,offset);
    if(element&&expanded_leaderboard::Read<unsigned long long>(element,0x20)!=actual)
     reinterpret_cast<void(__thiscall*)(void*,unsigned long long)>(0x5793F0)(element,actual);
@@ -77,6 +90,15 @@ void __fastcall Features(void* self,void*,unsigned long long requested){
 }
 void Frame(){
  if(!pursuitInstalled||!Active())return;
+ // GRaceStatus can already say "play" while a retry is still streaming.
+ // At that point the HUD vector can retain the just-destroyed dispatcher's
+ // address. Reconcile only after the native field/timer and HUD registry
+ // are live; do not probe the freed object and rely on its guarded read.
+ using gauntlet_runtime::Read;
+ unsigned flow=0,race=0,hudCount=0;BYTE loading=1,racing=0,timer=0;
+ if(!Read(0x925E90,flow)||flow!=6||!Read(0x91E000,race)||!race||
+    !Read(race+0x195C,loading)||loading||!Read(race+0x198A,racing)||!racing||
+    !Read(race+0x1978,timer)||!timer||!Read(0x92FD94,hudCount)||hudCount!=1)return;
  // Native FEngHud dispatches on feature changes. Stock intros can dispatch
  // before the race timer starts and never request the pursuit bits again.
  // Reconcile that state transition independently of diagnostics, without

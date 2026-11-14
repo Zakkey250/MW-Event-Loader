@@ -1,8 +1,10 @@
 #pragma once
+void* MWELRpdFreeRunVehicle();
 #include <windows.h>
 #include "DifficultyPolicy.h"
 #include "DriftForecastPolicy.h"
 bool MWELNeoDifficultySample(unsigned handle,mwel_difficulty::RaceSample& sample);
+bool MWELRpdPoliceSprint();
 struct MWELNeoScopeV1 {void* vehicle;unsigned handle,driverClass,failure;float heading[3],speed;};
 bool MWELInstallNeoDriver();
 bool MWELNeoDriverInstalled();

@@ -1,0 +1,10 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemGroup Label="ProjectConfigurations"><ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration></ItemGroup>
+ <PropertyGroup Label="Globals"><WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
+ <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><PlatformToolset>v143</PlatformToolset></PropertyGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
+ <ItemDefinitionGroup><ClCompile><LanguageStandard>stdcpp17</LanguageStandard><Optimization>MaxSpeed</Optimization><UndefinePreprocessorDefinitions>NDEBUG</UndefinePreprocessorDefinitions><PreprocessorDefinitions>NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions><AdditionalIncludeDirectories>../../NFSMWNativeFreeRoamRacers/third_party/minhook/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile><Link><BaseAddress>0x10000000</BaseAddress><RandomizedBaseAddress>false</RandomizedBaseAddress><AdditionalOptions>/OPT:REF %(AdditionalOptions)</AdditionalOptions></Link></ItemDefinitionGroup>
+ <ItemGroup><ClCompile Include="RpdSpeechSubjectTests.cpp"/><ClCompile Include="../../NFSMWNativeFreeRoamRacers/third_party/minhook/src/buffer.c"/><ClCompile Include="../../NFSMWNativeFreeRoamRacers/third_party/minhook/src/hook.c"/><ClCompile Include="../../NFSMWNativeFreeRoamRacers/third_party/minhook/src/trampoline.c"/><ClCompile Include="../../NFSMWNativeFreeRoamRacers/third_party/minhook/src/hde/hde32.c"/></ItemGroup>
+ <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
+</Project>

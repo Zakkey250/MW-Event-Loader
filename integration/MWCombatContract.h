@@ -4,13 +4,16 @@
 // Authored-module ABI. Never expose STL objects, borrowed game pointers or saves.
 namespace mwcombat {
 constexpr std::uint32_t Version=1;
-enum class Mode:std::uint32_t {None=0,ArmsRace=1,Gauntlet=2,HotPursuit=3,Drift=4,Invalid=0xffffffffu};
+constexpr std::uint32_t PoliceSide=2u; // EventV1 flags: human officer, AI racer suspects.
+constexpr std::uint32_t PoliceSprint=4u;
+enum class Mode:std::uint32_t {None=0,ArmsRace=1,Gauntlet=2,HotPursuit=3,Drift=4,Touge=5,Invalid=0xffffffffu};
 inline Mode Parse(const char* name){
  if(!name||!std::strcmp(name,"none"))return Mode::None;
  if(!std::strcmp(name,"armsrace"))return Mode::ArmsRace;
  if(!std::strcmp(name,"gauntlet"))return Mode::Gauntlet;
  if(!std::strcmp(name,"hotpursuit"))return Mode::HotPursuit;
  if(!std::strcmp(name,"drift"))return Mode::Drift;
+ if(!std::strcmp(name,"touge"))return Mode::Touge;
  return Mode::Invalid;
 }
 inline bool Weapons(Mode m){return m==Mode::ArmsRace||m==Mode::Gauntlet||m==Mode::HotPursuit;}
@@ -21,7 +24,7 @@ inline bool Compatible(Mode m,const char* base,unsigned count){
  if(m==Mode::HotPursuit&&count>8)return false;
  // Police are pursuit actors, not entrants. Read legacy two-slot packages too.
  if(m==Mode::Gauntlet)return (count==1||count==2)&&!std::strcmp(base,"tollboothrace");
- if(m==Mode::Drift)return !std::strcmp(base,"sprint")||!std::strcmp(base,"circuit");
+ if(m==Mode::Drift||m==Mode::Touge)return !std::strcmp(base,"sprint")||!std::strcmp(base,"circuit");
  if(m==Mode::ArmsRace)return !std::strcmp(base,"sprint")||!std::strcmp(base,"speedtraprace")||!std::strcmp(base,"circuit")||!std::strcmp(base,"lapknockout");
  return !std::strcmp(base,"sprint")||!std::strcmp(base,"speedtraprace");
 }
@@ -42,10 +45,20 @@ struct AmmoV1 {
 static_assert(sizeof(AmmoV1)==40,"event ammo ABI layout");
 constexpr unsigned AmmoLimit=510;
 using QueryAmmo=unsigned(__cdecl*)(unsigned status,unsigned params,AmmoV1*,unsigned size);
+inline constexpr const char* RacerWeaponNames[]={"emp","spike","shockwave","jammer"};
+struct RacerWeaponsV1 {
+ std::uint32_t size=sizeof(RacerWeaponsV1),version=Version,ammoMask=0,cooldownMask=0;
+ std::uint32_t counts[4]{},cooldownSeconds[4]{};
+};
+static_assert(sizeof(RacerWeaponsV1)==48,"RPD racer weapons ABI layout");
+using QueryRacerWeapons=unsigned(__cdecl*)(unsigned status,unsigned params,RacerWeaponsV1*,unsigned size);
 struct HealthV1 {
  std::uint32_t size=sizeof(HealthV1),version=Version,eventKey=0,epoch=0,handle=0,slot=0;
  float remaining=0,maximum=0;std::uint32_t flags=0,driver=0;
 };
+// Optional additive HealthV1 flag. A live suspect is being held inside an
+// arrest zone; consumers may prefer an escape weapon. Never means retired.
+constexpr std::uint32_t ArrestPressure=4u;
 static_assert(sizeof(HealthV1)==40,"health ABI layout");
 using ObserveHealth=unsigned(__cdecl*)(unsigned slot,unsigned handle,unsigned damage,unsigned driver,HealthV1*,unsigned size);
 using QueryHealth=unsigned(__cdecl*)(unsigned slot,unsigned handle,HealthV1*,unsigned size);
@@ -61,6 +74,10 @@ struct NoticeV1 {
 };
 static_assert(sizeof(NoticeV1)==32,"combat notice ABI layout");
 using SubmitNotice=unsigned(__cdecl*)(const NoticeV1*,unsigned size);
+// Confirmed outcomes only. The receiver verifies the local role and handle,
+// including ordinary native pursuits with no custom event or combat ledger.
+enum class Takedown:std::uint32_t {RacerArrest=1,RacerWreck,PoliceWreck};
+using SubmitTakedown=unsigned(__cdecl*)(unsigned outcome,unsigned actor,unsigned target);
 inline unsigned PoliceBudget(unsigned racers){return racers>=1&&racers<=16?racers*2:0;}
 inline float RewardFraction(unsigned place,unsigned participants){
  if(place<1||place>participants||participants<1||participants>16)return 0;

@@ -1,4 +1,5 @@
 #include "CombatHealthPolicy.h"
+#include "RpdInterceptorPolicy.h"
 #include "CombatImpactPolicy.h"
 #include "PoliceDeploymentPolicy.h"
 #include "HotPursuitPolicy.h"
@@ -8,6 +9,20 @@
 #include <cstdlib>
 void Check(bool ok,const char* what){if(!ok){std::printf("FAIL %s\n",what);std::exit(1);}}
 int main(){
+ Check(!rpd_interceptor_policy::ArrestHealth(true,true,125.01f,500),"Arsenal Pursuit refuses arrest above 25 percent of authored HP");
+ Check(rpd_interceptor_policy::ArrestHealth(true,true,125,500)&&rpd_interceptor_policy::ArrestHealth(true,true,75,300),"25 percent boundary is inclusive and follows configured maximum");
+ Check(!rpd_interceptor_policy::ArrestHealth(true,false,0,500)&&!rpd_interceptor_policy::ArrestHealth(true,true,0,0)&&!rpd_interceptor_policy::ArrestHealth(true,true,NAN,500)&&!rpd_interceptor_policy::ArrestHealth(true,true,1,INFINITY)&&!rpd_interceptor_policy::ArrestHealth(true,true,-1,500),"missing, stale and invalid health cannot unlock arrest");
+ Check(rpd_interceptor_policy::ArrestHealth(false,true,500,500)&&rpd_interceptor_policy::ArrestHealth(false,false,0,0),"Arsenal Pursuit OFF retains local officer arrest without HP restriction");
+ Check(rpd_interceptor_policy::ArrestIncrement(false,.025f,.1f)==-.05f,"allies cannot hold previously earned positive arrest progress");
+ Check(rpd_interceptor_policy::ArrestIncrement(true,.025f,.1f)==.025f&&rpd_interceptor_policy::ArrestIncrement(false,-.05f,.1f)==-.05f,"native local arrest and native decay remain unchanged");
+ Check(rpd_interceptor_policy::ArrestIncrement(false,.025f,0)==0,"pause cannot add or decay arrest time");
+ {rpd_interceptor_policy::Stuck s;Check(!s.Step(.1333333f,0,0,0),"first physical sample starts the stuck window");for(unsigned i=0;i<37;++i)Check(!s.Step(.1333333f,0,0,0),"low frame rate must not recover before five simulation seconds");Check(s.Step(.1333333f,0,0,0),"valid low frame rate reaches the five-second recovery deadline");Check(!s.Step(.1333333f,9,0,0)&&s.seconds==0,"real translation resets the recovery deadline");Check(!s.Step(0,9,0,0)&&!s.Step(1,9,0,0)&&s.seconds==0,"pause and discontinuous clock jumps cannot advance recovery");}
+ {rpd_interceptor_policy::Stuck s;s.Step(.1f,0,0,0);for(unsigned i=0;i<49;++i)Check(!s.Step(.1f,i%2?3.5f:-3.5f,float(i),0),"rocking and suspension bounce cannot reset horizontal progress window");Check(s.Step(.1f,0,50,0),"blocked rocking must request recovery after five simulation seconds");}
+ Check(!rpd_interceptor_policy::ArrestContribution(false,true,1),"disabled officer cannot arrest through allies");
+ Check(!rpd_interceptor_policy::ArrestContribution(true,false,1),"allied visibility alone cannot increase arrest time");
+ Check(!rpd_interceptor_policy::ArrestContribution(true,true,15.01f),"distant officer cannot inherit an ally arrest contribution");
+ Check(rpd_interceptor_policy::ArrestContribution(true,true,15)&&rpd_interceptor_policy::ArrestContribution(true,true,0),"live officer can arrest inside the native fifteen-metre radius");
+ Check(!rpd_interceptor_policy::ArrestContribution(true,true,-1),"invalid arrest distance refused");
  for(unsigned count=1;count<=16;++count){
   Check(mwcombat::Compatible(mwcombat::Mode::Gauntlet,"tollboothrace",count)==(count<=2),"Gauntlet accepts one racer and legacy two-slot packages only");
   Check(!mwcombat::Compatible(mwcombat::Mode::Gauntlet,"sprint",count),"Gauntlet never accepts a sprint base");
@@ -31,6 +46,7 @@ int main(){
  Check(hot_pursuit::RollingSpeed(70)==30&&hot_pursuit::RollingSpeed(12)==12&&hot_pursuit::RollingSpeed(0)==0&&hot_pursuit::RollingSpeed(NAN)==0,"reinforcements inherit bounded observed speed, never an invalid launch impulse");
  Check(hot_pursuit::PoliceContactScale(true,0,2)==.5f&&hot_pursuit::PoliceContactScale(true,3,2)==.5f,"Hot Pursuit police contacts reduce player and AI racer damage equally");
  Check(hot_pursuit::PoliceContactScale(false,0,2)==1&&hot_pursuit::PoliceContactScale(true,0,3)==1&&hot_pursuit::PoliceContactScale(true,2,3)==1&&hot_pursuit::PoliceContactScale(true,0,~0u)==1,"other modes, racer contacts, police victims and unknown scenery retain collision damage");
+ Check(hot_pursuit::PoliceContactScale(true,3,2,true)==.4f&&hot_pursuit::PoliceContactScale(true,3,0,true)==1.f&&hot_pursuit::PoliceContactScale(true,0,2,true)==.5f,"RPD sprint reduces allied ram damage to 80 percent of its prior value for suspects only");
  for(unsigned rank=1;rank<=4;++rank)Check(hot_pursuit::Quota(rank,4,24,8)==4,"eight-racer police budget redistributes to four native survivors");
  Check(hot_pursuit::Quota(1,1,24,8)==16&&hot_pursuit::Quota(1,1,8,8)==8,"last survivor inherits the existing budget while respecting native capacity");
  for(const auto hit:{combat_health::Hit::Emp,combat_health::Hit::Spike,combat_health::Hit::Shockwave}){

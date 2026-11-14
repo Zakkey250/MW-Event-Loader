@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cassert>
 #include <cstdio>
+#include <limits>
 struct Vec3{float x,y,z;};
 struct RayHit{Vec3 point{},normal{0,1,0};};
 struct YellowRecoveryPoint{float p[3];float station;};
@@ -34,6 +35,15 @@ int main(){
  world.bridge=true;auto lower=NeoGroundTrajectory(world,road,16,car,40,16,true);assert(YellowLineSample(lower,60,b)&&std::abs(b.y-92.5f)<.01f);
  float upperCar[]={16,106.5f,0};auto mismatch=NeoGroundTrajectory(world,road,16,upperCar,40,16,true);assert(YellowLineSample(mismatch,16,b)&&std::abs(b.y-100.5f)<.01f);
  world.bridge=false;float cursor=16;auto tracked=road;
+ // A stale station on the same descending road must anchor at the actual
+ // body's local floor before following the slope. Never relocate X/Z or
+ // silently switch from a supported lower deck to an upper bridge.
+ float laggedCar[]={38,93.3f,0};auto lagged=NeoGroundTrajectory(world,road,16,laggedCar,40,16,true);
+ float laggedCursor=16;assert(NeoProjectSupportedRoad(world,lagged,{38,93.3f,0},16,laggedCursor,90,&road)&&std::abs(laggedCursor-38)<.01f);
+ for(const auto& p:lagged){assert(std::abs(p.p[0]-p.station)<.01f);assert(p.p[2]==0);}
+ world.bridge=true;std::vector<YellowRecoveryPoint> lowerRoad={{{0,100.5f,0},0},{{20,100.5f,0},20},{{40,92.5f,0},40},{{80,92.5f,0},80}};
+ float upperLagged[]={60,106.5f,0};auto refused=NeoGroundTrajectory(world,lowerRoad,16,upperLagged,40,16,true);
+ float refusedCursor=16;assert(!NeoProjectSupportedRoad(world,refused,{60,106.5f,0},16,refusedCursor,90,&lowerRoad));world.bridge=false;
  assert(NeoAirborneRoadProjection(world,road,{16,105,0},70,.9f,.05f,16,cursor,tracked)&&std::abs(cursor-16)<.01f);
  assert(!NeoAirborneRoadProjection(world,road,{16,105,0},70,2.1f,.05f,16,cursor,tracked));
  assert(!NeoAirborneRoadProjection(world,road,{16,105,0},70,-.1f,.05f,16,cursor,tracked));

@@ -3,11 +3,11 @@
 [日本語](README.ja.md) · [Event Editor](https://zakkey250.github.io/MW-Event-Editor/) · [All releases](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.1.0:** Adds Drift races with MW Arcade Drift 0.2.0 support, a dedicated HUD, point-based results and NeoAI drift driving. [Release notes](docs/Release-Notes-1.1.0.md)
+> **1.2.0:** Adds Downhill Battle, public W2C v2 RC4 support and RPD Case Files (prototype). [Release notes](docs/Release-Notes-1.2.0.md)
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader 1.1.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.1.0) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader 1.2.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.0) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.
@@ -59,12 +59,12 @@ You need the PC version of MW 2005, a supported speed.exe and a 32-bit ASI loade
 ### NFRR / MW Native Free Roam Racer (Required)
 
 Used for opponent selection and NeoAI integration. Use a version compatible with Event Loader.
-Author’s GitHub: <https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+Author’s GitHub: <https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 
 ### LB / MW Limit Breaker (Required)
 
 Included in the NFRR download. LB is optional for NFRR on its own, but should be installed for Event Loader’s larger race fields. It is not bundled again with Event Loader or event-data ZIPs.
-NFRR download page (includes LB): <https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+NFRR download page (includes LB): <https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 
 ### MWArsenal (Required for ArmsAssist & Weapon Modes)
 
@@ -72,11 +72,11 @@ Install both MWArsenal and its assets. MWArsenal alone does not enable the three
 There is no need to install MWArsenal’s separate string files; ArmsAssist supplies the required on-screen text.
 Download by Shiftersc & LEE-RYO: <https://www.nfsaddons.com/downloads/nfsmw/tools/11267/mw-arsenal.html>
 
-### MW Arcade Drift 0.2.0 (Required for Drift Races)
+### MW Arcade Drift 0.2.1 (Required for Drift Races)
 
 Supported from Event Loader 1.1.0. Install both **MWArcadeDrift.asi** and **MWArcadeDriftAI.asi** from its Core package. Drift events automatically select Special mode for the player and enable drift assistance for NeoAI opponents; leaving the event restores your previous player mode. This dependency is optional if you do not play Drift races. Its separate Editor is optional for per-car tuning and control-device settings.
 Author’s GitHub: <https://github.com/Zakkey250/MW-Arcade-Drift>
-Core 0.2.0: <https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.0>
+Core 0.2.1: <https://github.com/Zakkey250/MW-Arcade-Drift/releases/tag/v0.2.1>
 
 ### MWHealthbars / NFSMW Cop Car Healthbars (Recommended / Optional)
 
@@ -114,6 +114,10 @@ W2C events require the matching W2C world and its loader. Follow the event autho
 
 “1.3” refers to the MW game version. A file named speed.exe may still be unsupported if its contents differ. You can retain non-English game resources, but must use a supported executable. Compatibility with every combination of mods is not guaranteed.
 
+### W2C to MW v2 RC4
+
+Required for Downhill Battle. The Event Editor can migrate a linked Rockport project to the public RC4 world. Checkpoint warnings identify events that need review. [W2C to MW v2 RC4](https://github.com/Zakkey250/W2C-to-MW-Converter/releases/tag/v2.0.0-rc4).
+
 ## Downloads & Package Contents
 
 ### Main Package
@@ -128,7 +132,7 @@ W2C events require the matching W2C world and its loader. Follow the event autho
 - The main package.
 - MW Cutscene Converter.
 
-The main package and converter are separate downloads. Sample events are not included in this release. The editor runs in your browser. Event-data ZIPs contain no ASIs or installer. Install NFRR, LB, MWArsenal, Healthbars and your ASI loader separately as needed. Game executables, worlds and converted cutscenes are not included.
+The main package and converter are separate downloads. Sample events are not included in this release. The editor runs in your browser. Event-data ZIPs contain no ASIs or installer. Install NFRR, LB, MWArsenal, Healthbars and your ASI loader separately as needed. Game executables and world assets are distributed separately. The main package includes HP-style playback files and four RPD intro jingles. Install other converted scenes separately.
 
 ## Update notifications
 
@@ -286,7 +290,7 @@ For example, a configured reward of 25,000 with six survivors and a third-place 
 
 ## Additional Mode 4: Drift
 
-A point-based Sprint or Circuit with police, weapons and the additional HP rules disabled. Install MW Arcade Drift 0.2.0 Core separately.
+A point-based Sprint or Circuit with police, weapons and the additional HP rules disabled. Install MW Arcade Drift 0.2.1 Core separately.
 
 - Every two seconds of qualifying drifting raises the multiplier by one level, up to x10.
 - Driving close to walls or other cars adds bonuses. A heavy wall hit loses the pending combo, while banked points remain safe.
@@ -333,7 +337,7 @@ MWHealthbars: <https://github.com/trelbutate/MWHealthbars>
 - Ultimate ASI Loader: ThirteenAG.
 Ultimate ASI Loader: <https://github.com/ThirteenAG/Ultimate-ASI-Loader>
 - NFRR, LB & MW Event Editor: Zakkey250.
-NFRR: <https://github.com/Zakkey250/MW-NativeFreeRoamRacer>
+NFRR: <https://github.com/Zakkey250/MW-NativeFreeRoamRacer/releases/tag/v0.1.4>
 LB: <https://github.com/Zakkey250/MW-Limit-breaker>
 MW Event Editor: <https://zakkey250.github.io/MW-Event-Editor/>
 

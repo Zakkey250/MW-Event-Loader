@@ -1,4 +1,5 @@
 #pragma once
+#include "WorldProviderModule.h"
 #include "../../integration/MWEventGeometryApi.h"
 #include "../../World2MW/src/NativeLoader/PackFormat.h"
 namespace event_geometry {
@@ -19,7 +20,7 @@ class WorldQueries {
   // World activation belongs to W2C. A previously selected native backend
   // becomes unavailable when that loader activates; retry both providers
   // instead of leaving the event loader pinned to its earlier selection.
-  auto module=GetModuleHandleW(L"World2MWNativeLoader.asi");
+  auto module=mwel_world_provider::Module();
   using Get=unsigned(__cdecl*)(mwelgeo::Api*,unsigned);
   auto get=module?reinterpret_cast<Get>(GetProcAddress(module,"W2MW_GeometryApiV1")):nullptr;
   mwelgeo::Api candidate{};

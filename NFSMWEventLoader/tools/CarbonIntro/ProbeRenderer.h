@@ -95,7 +95,7 @@ public:
   // Old private camera packs encoded signed interpolation undershoot as an
   // unsigned scalar. Never turn these invalid percentages into a blackout.
   if(!std::isfinite(amount)||amount>=2147483648.f)return;
-  unsigned alpha=unsigned(std::clamp(amount,0.f,100.f)*2.55f);if(!alpha)return;
+  unsigned alpha=amount>=100.f?255u:unsigned(std::clamp(amount,0.f,100.f)*2.55f);if(!alpha)return;
   IDirect3DStateBlock9* state=nullptr;if(FAILED(device->CreateStateBlock(D3DSBT_ALL,&state)))return;
   struct ScreenVertex{float x,y,z,w;DWORD color;};DWORD color=alpha<<24;
   float x=float(v.X)-.5f,y=float(v.Y)-.5f,r=x+v.Width,b=y+v.Height;

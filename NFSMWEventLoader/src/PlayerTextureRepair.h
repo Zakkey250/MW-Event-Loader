@@ -1,13 +1,12 @@
 #pragma once
-// Preserve the whole permanent-layer ownership before native emergency eviction
-// drops it. Temporary layers and the player's own destruction remain native.
+// Preserve a live local player's permanent layers during native pressure
+// eviction, including the first race after starting the game.
 namespace player_texture_repair {
+constexpr std::uintptr_t PressureEvictionReturn = 0x759F90;
 template<class T>T ReadValue(const void* p,unsigned offset=0){T value{};if(p)Copy(static_cast<const BYTE*>(p)+offset,&value,sizeof(value));return value;}
-bool armed=false;
 thread_local void* retiringConnection=nullptr;
 int(__thiscall* originalUnloadPerms)(void*,void*)=nullptr;
 void(__thiscall* originalUnloadConnection)(void*)=nullptr;
-void Queue(unsigned key){if(key)armed=true;}
 bool LivePlayerOwnsSkin(void* skin){
  if(!skin||ReadValue<unsigned>(reinterpret_cast<void*>(0x925E90))!=6)return false;
  auto data=ReadValue<BYTE**>(reinterpret_cast<void*>(0x9B37CC));
@@ -30,9 +29,8 @@ bool LivePlayerOwnsSkin(void* skin){
  return false;
 }
 int __fastcall UnloadPerms(void* self,void*,void* skin){
- const bool live=self==reinterpret_cast<void*>(0x9B2C00)&&(armed||worldLogEnabled)&&LivePlayerOwnsSkin(skin);
- if(live&&!armed)Log("EVENT_PLAYER_PERMANENT_EVICTION_UNPROTECTED skin=%08X layers=%u caller=%08X first_race_guard_unarmed=1",unsigned(skin),ReadValue<unsigned>(skin,0x20),unsigned(_ReturnAddress()));
- if(live&&armed){
+ if(reinterpret_cast<std::uintptr_t>(_ReturnAddress())==PressureEvictionReturn&&
+    self==reinterpret_cast<void*>(0x9B2C00)&&LivePlayerOwnsSkin(skin)){
   if(worldLogEnabled){
    Log("EVENT_PLAYER_PERMANENT_EVICTION_PREVENTED skin=%08X layers=%u caller=%08X live_render_owner=1 native_temporary_release=1",unsigned(skin),ReadValue<unsigned>(skin,0x20),unsigned(_ReturnAddress()));
    void* frames[12]{};auto count=CaptureStackBackTrace(1,12,frames,nullptr);

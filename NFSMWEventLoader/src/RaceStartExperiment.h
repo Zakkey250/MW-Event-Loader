@@ -19,6 +19,7 @@ unsigned completedGoalPlace=0;
 ULONGLONG completedDelayAt=0;
 unsigned transitionLimit=1,transitionCount=0;
 std::string transitionPrimary,transitionSecondary;
+std::string selectedLabPackage;
 ULONGLONG roamingEnteredAt=0;
 BYTE* unloadPlayerVehicle=nullptr;
 float unloadPlayerAnchor[3]{};
@@ -48,6 +49,7 @@ bool ConfigureCustomTransition(){
  customTransitionTest=true;return true;
 }
 const mwel::EventPackage& BootstrapPackage(){
+ if(!selectedLabPackage.empty())for(const auto& p:packages)if(p.id==selectedLabPackage)return p;
  if(customTransitionTest)for(const auto& p:packages)if(p.id==transitionPrimary)return p;
  return packages.front();
 }
@@ -59,8 +61,12 @@ unsigned faults=0;
 bool aborted=false;
 void* checkpointAuditRace=nullptr;
 bool checkpointLayoutLogged=false;
-struct Motion {unsigned handle=0,routeRevision=0;float initial[3]{};float last[3]{};float progressAnchor[3]{};float routeStation=0;ULONGLONG moved=0,sampled=0,progress=0,pendingGateAt=0,routeProgressAt=0;int checkpoint=-1;bool eliminationLogged=false,recoveryVerificationUsed=false;};
+struct Motion {unsigned handle=0,routeRevision=0;float initial[3]{};float last[3]{};float progressAnchor[3]{};float routeStation=0,nativeClock=0;ULONGLONG moved=0,sampled=0,progress=0,pendingGateAt=0,routeProgressAt=0,nativeClockAdvanced=0;int checkpoint=-1;bool eliminationLogged=false,recoveryVerificationUsed=false;};
 Motion motions[16]{};
+#ifdef MWEL_PRIVATE_START_VELOCITY_PROOF
+struct StartVelocityProof {unsigned handle=0,samples=0;ULONGLONG begun=0;float first=0,minimum=1000;bool reported=false;};
+StartVelocityProof startVelocityProof[16]{};
+#endif
 template<class T>T Read(void* ptr,unsigned offset=0){T result{};if(ptr)Copy(static_cast<BYTE*>(ptr)+offset,&result,sizeof(result));return result;}
 
 #include "NativePerformanceFixture.h"
@@ -93,14 +99,17 @@ void __cdecl Start(){
  *reinterpret_cast<unsigned*>(0x926094)=0;
  // Native debug startup treats 8F86C0 as force-cops-OFF, not enable cops.
  // Preserve the authored policy so a police mode is actually tested as one.
- const bool wantPolice=registration_experiment::authoredGeometry&&!nativeBaseline&&BootstrapPackage().authoring.value("cops",false);
+ const auto& policeAuthoring=BootstrapPackage().authoring;
+ const auto combat=policeAuthoring.value("combatMode",std::string("none"));
+ const bool wantPolice=registration_experiment::authoredGeometry&&!nativeBaseline&&
+  (policeAuthoring.value("cops",false)||combat=="hotpursuit"||combat=="gauntlet");
  *reinterpret_cast<unsigned*>(0x8F86C0)=wantPolice?0u:1u;
+ Log("EXPERIMENT_NATIVE_POLICE_POLICY enabled=%u combat=%s debug_disable_cops=%u",unsigned(wantPolice),combat.c_str(),unsigned(!wantPolice));
  *reinterpret_cast<float*>(0x926090)=0;
  // Native debug start passes this lap option to GRaceParameters::SetNumLaps
  // at 006EA0BD..006EA0CC. Its default 2 otherwise overrides the package.
  // Configure the fixture before native setup; never write live CP/finish state.
  if(registration_experiment::authoredGeometry&&!nativeBaseline)*reinterpret_cast<unsigned*>(0x8F86BC)=mwel::RaceLaps(BootstrapPackage().authoring);
- auto& clone=*registration_experiment::clones.front();
  auto db=*reinterpret_cast<void**>(0x91E004);
  unsigned key=reinterpret_cast<unsigned(__cdecl*)(const char*)>(0x4519D0)(selection.c_str());
  auto descriptor=reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5FB710)(db,key);
@@ -108,10 +117,10 @@ void __cdecl Start(){
  if(!descriptor){Log("EXPERIMENT_RACE_ABORT event_not_registered");return;}
  if(registration_experiment::authoredGeometry){
   unsigned selectedOwner=0;
-  if(careerChainTest)for(const auto& c:registration_experiment::clones)if(c->race&&c->eventId==selection)selectedOwner=c->collection.key;
-  if(careerChainTest&&!selectedOwner){Log("EXPERIMENT_RACE_ABORT career_primary_owner_missing");return;}
+  if(careerChainTest||!selectedLabPackage.empty())for(const auto& c:registration_experiment::clones)if(c->race&&c->eventId==selection)selectedOwner=c->collection.key;
+  if((careerChainTest||!selectedLabPackage.empty())&&!selectedOwner){Log("EXPERIMENT_RACE_ABORT career_primary_owner_missing");return;}
   for(auto& gate:registration_experiment::clones)if(!gate->race&&!gate->bin&&!gate->placement){
-   if(careerChainTest&&gate->ownerKey!=selectedOwner)continue;
+   if((careerChainTest||!selectedLabPackage.empty())&&gate->ownerKey!=selectedOwner)continue;
    if(!registration_experiment::GeometryObject(gate->collection.key,gate->templateKey==0xAAF8BB9C)){Log("EXPERIMENT_RACE_ABORT geometry_object_unavailable");return;}
   }
  }
@@ -145,7 +154,9 @@ void SampleUnsafe(void* primary){
   if(begin&&end&&countBytes<=64*sizeof(void*)&&countBytes%sizeof(void*)==0){
    for(unsigned i=0;i<countBytes/sizeof(void*);++i){
     auto trigger=Read<BYTE*>(begin,i*4);float position[3]{},direction[3]{},bounds[16]{};
-    Copy(trigger+0x58,position,12);Copy(trigger+0x68,direction,12);Copy(trigger+0x28,bounds,64);
+    // Start-only free-run keeps an empty native checkpoint slot. It is not
+    // an instantiated trigger and must never be passed to its key getter.
+    if(!trigger||!Copy(trigger+0x58,position,12)||!Copy(trigger+0x68,direction,12)||!Copy(trigger+0x28,bounds,64))continue;
     auto key=reinterpret_cast<unsigned(__thiscall*)(void*)>(0x452430)(trigger+4);
     Log("EXPERIMENT_NATIVE_CHECKPOINT index=%u key=%08X object=%08X position=%.3f,%.3f,%.3f direction=%.4f,%.4f,%.4f enabled=%u active=%u bounds=%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",i,key,unsigned(trigger),position[0],position[1],position[2],direction[0],direction[1],direction[2],Read<unsigned>(trigger,0x74),unsigned(Read<BYTE>(trigger,0xC4)),bounds[0],bounds[1],bounds[2],bounds[3],bounds[4],bounds[5],bounds[6],bounds[7],bounds[8],bounds[9],bounds[10],bounds[11],bounds[12],bounds[13],bounds[14],bounds[15]);
    }
@@ -161,7 +172,7 @@ void SampleUnsafe(void* primary){
  if(delayedStart&&!completedDelayAt){
   completedDelayAt=GetTickCount64();Log("EXPERIMENT_LOWER_FINISH_START_DELAY milliseconds=8000 rank_write=0 fixture_only=1");
  }
- if(!manualPlayer&&!playerSetup&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978)&&
+ if(!manualPlayer&&!playerSetup&&!mwel::RpdStartOnly(BootstrapPackage().authoring)&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978)&&
     (!delayedStart||GetTickCount64()-completedDelayAt>=8000)){
   const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
   if(memcmp(reinterpret_cast<void*>(0x6123B0),guard,sizeof(guard))){Log("EXPERIMENT_RACE_ABORT native_player_controller_guard");return;}
@@ -218,6 +229,30 @@ void SampleUnsafe(void* primary){
  NeoBodyMotion body;if(!NeoReadBody(vehicle,body))return;
  auto now=GetTickCount64();if(!firstDriving)firstDriving=now;
  auto& motion=motions[slot];if(motion.handle!=handle){motion.handle=handle;memcpy(motion.initial,body.position,12);memcpy(motion.last,body.position,12);memcpy(motion.progressAnchor,body.position,12);motion.moved=motion.progress=now;}
+#ifdef MWEL_PRIVATE_START_VELOCITY_PROOF
+ // Private, read-only observer. No velocity, input or position writes.
+ if(playerEngineTest){
+  auto& proof=startVelocityProof[slot];const float speed=std::hypot(body.velocity[0],body.velocity[2]);
+  if(proof.handle!=handle){proof={};proof.handle=handle;proof.begun=now;proof.first=speed;proof.minimum=1000;}
+  if(!proof.reported){proof.minimum=std::min(proof.minimum,speed);++proof.samples;
+   MWELNeoMotionState input;MWELNeoReadMotion(handle,input);
+   auto com=Read<void*>(vehicle,4);auto controls=com?reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5D59F0)(com,0x403F90):nullptr;
+   float gas=-1,brake=-1,handbrake=-1;auto inputTable=Read<void**>(controls);
+   // IInput::GetControls slot 2, SDK InputControls float order: banking,
+   // steering, vertical/strafe controls, gas, brake, handbrake. Read only.
+   if(inputTable){const auto native=reinterpret_cast<const float*(__thiscall*)(void*)>(Read<void*>(inputTable,8))(controls);float values[8]{};if(Copy(native,values,sizeof(values))){gas=values[5];brake=values[6];handbrake=values[7];}}
+   Log("EXPERIMENT_START_VELOCITY_SAMPLE slot=%u ms=%llu speed=%.5f position=%.4f,%.4f,%.4f inputs_known=%u throttle=%.4f brake=%.4f native_gas=%.4f native_brake=%.4f native_handbrake=%.4f read_only=1",slot,now-proof.begun,speed,body.position[0],body.position[1],body.position[2],unsigned(input.known),input.throttle,input.brake,gas,brake,handbrake);
+   if(now-proof.begun>=300){proof.reported=true;Log("EXPERIMENT_START_VELOCITY_PROOF slot=%u samples=%u first=%.5f minimum=%.5f body_metres=%.5f read_only=1",slot,proof.samples,proof.first,proof.minimum,std::hypot(body.position[0]-motion.initial[0],body.position[2]-motion.initial[2]));}
+  }
+ }
+#endif
+ // Observe the same native simulation clock used by the lap timer. UI pause
+ // stops this clock but not our wall-clock observer. 0x9885C8 is a material
+ // manager pointer, not a pause flag; never infer pause from that address.
+ const float nativeClock=reinterpret_cast<float(__cdecl*)()>(0x6E8DE0)();
+ if(!motion.nativeClockAdvanced||nativeClock!=motion.nativeClock){motion.nativeClock=nativeClock;motion.nativeClockAdvanced=now;}
+ const bool paused=now-motion.nativeClockAdvanced>=250;
+ if(paused){motion.moved=motion.progress=now;motion.pendingGateAt=0;motion.routeProgressAt=0;}
  float distance=std::hypot(body.position[0]-motion.last[0],body.position[2]-motion.last[2]);
  if(distance>.25f){memcpy(motion.last,body.position,12);motion.moved=now;}
  float progressDistance=std::hypot(body.position[0]-motion.progressAnchor[0],body.position[2]-motion.progressAnchor[2]);
@@ -258,7 +293,7 @@ void SampleUnsafe(void* primary){
  if(now-motion.sampled>=1000){
   auto goal=Read<void*>(primary,0xB8),action=Read<void*>(goal,4);
   float total=std::hypot(body.position[0]-motion.initial[0],body.position[2]-motion.initial[2]);
-  Log("EXPERIMENT_RACE_BODY handle=%u slot=%u position=%.3f,%.3f,%.3f moved_metres=%.3f owner=%08X action=%08X checkpoint=%d lap=%d finished_flag=%u genuine_goal_verified=%u",handle,slot,body.position[0],body.position[1],body.position[2],total,Read<unsigned>(primary),Read<unsigned>(action),Read<int>(race,0x18+slot*0x194+0x2C),Read<int>(race,0x18+slot*0x194+0x28),unsigned(finished),unsigned((genuineGoals&(1u<<slot))!=0));
+  Log("EXPERIMENT_RACE_BODY handle=%u slot=%u position=%.3f,%.3f,%.3f moved_metres=%.3f owner=%08X action=%08X checkpoint=%d lap=%d finished_flag=%u genuine_goal_verified=%u paused=%u",handle,slot,body.position[0],body.position[1],body.position[2],total,Read<unsigned>(primary),Read<unsigned>(action),Read<int>(race,0x18+slot*0x194+0x2C),Read<int>(race,0x18+slot*0x194+0x28),unsigned(finished),unsigned((genuineGoals&(1u<<slot))!=0),unsigned(paused));
   auto info=race+0x18+slot*0x194;
   static_assert(offsetof(NFSPluginSDK::MW05::GRacerInfo,mRanking)==0x10);
   float nativeSeconds=Read<float>(info,0x150);if(Read<BYTE>(info,0x154))nativeSeconds+=reinterpret_cast<float(__cdecl*)()>(0x6E8DE0)()-Read<float>(info,0x14C);
@@ -421,7 +456,17 @@ std::string BaselineSelection(){
  const auto& authoring=BootstrapPackage().authoring;
  return authoring.at("eventId").get<std::string>();
 }
+void ConfigureSelectedLabPackage(){
+ auto packageMarker=game/L"MWEventLoader.package-select-test";
+ if(mwel::fs::exists(packageMarker)){
+  const auto raw=mwel::Read(packageMarker,128);const std::string header="MW_EVENT_LOADER_SELECTED_PACKAGE_V1\n";
+  if(productionRuntime||!neoObserver||!mwel::fs::exists(game/L"MWEventLoader.local-test")||raw.rfind(header,0)!=0||raw.back()!='\n')throw std::runtime_error("Selected package requires isolated no-save observer");
+  selectedLabPackage=raw.substr(header.size(),raw.size()-header.size()-1);
+  if(!mwel::EventId(selectedLabPackage)||std::count_if(packages.begin(),packages.end(),[&](const auto& p){return p.id==selectedLabPackage;})!=1)throw std::runtime_error("Selected lab package absent or ambiguous");
+ }
+}
 void PrimeBootstrap(){
+ ConfigureSelectedLabPackage();
  if(mwel::fs::exists(game/L"MWEventLoader.player-engine-test")){
   const auto marker=mwel::Read(game/L"MWEventLoader.player-engine-test",128);
   playerPadEngineTest=marker=="MW_EVENT_LOADER_PLAYER_PAD_ENGINE_TEST_V1\n";
@@ -432,7 +477,7 @@ void PrimeBootstrap(){
   if(productionRuntime||!neoObserver||!mwel::fs::exists(game/L"MWEventLoader.local-test")||mwel::Read(game/L"MWEventLoader.manual-player-test",128)!="MW_EVENT_LOADER_MANUAL_PLAYER_TEST_V1\n")throw std::runtime_error("Manual player test requires the marked isolated no-save lab");
   manualPlayer=true;Log("EXPERIMENT_MANUAL_PLAYER native_input=1 player_autopilot=0");
  }
- if(packages.size()!=1&&!customTransitionTest)throw std::runtime_error("exactly one package required for early bootstrap");
+ if(packages.size()!=1&&!customTransitionTest&&selectedLabPackage.empty())throw std::runtime_error("exactly one package required for early bootstrap");
  const auto performanceFixtureMode=GetPrivateProfileIntW(L"Diagnostics",L"NativePerformanceFixture",0,mwel_paths::Settings(game).c_str());
  performanceFixture=performanceFixtureMode==1||performanceFixtureMode==2;
  performanceFixtureJunkman=performanceFixtureMode==1;
@@ -448,7 +493,7 @@ void PrimeBootstrap(){
  Log("EXPERIMENT_RACE_BOOTSTRAP_PRIMED ASI_initialization=1 database_not_constructed=1 car=%s",playerCar.c_str());
 }
 void SetSelection(){
- if(registration_experiment::clones.empty()||(!customTransitionTest&&std::count_if(registration_experiment::clones.begin(),registration_experiment::clones.end(),[](auto& c){return c->race;})!=1))throw std::runtime_error("exactly one registered race required for start experiment");
+ if(registration_experiment::clones.empty()||(!customTransitionTest&&selectedLabPackage.empty()&&std::count_if(registration_experiment::clones.begin(),registration_experiment::clones.end(),[](auto& c){return c->race;})!=1))throw std::runtime_error("exactly one registered race required for start experiment");
  BootstrapSelection(nativeBaseline?BaselineSelection():BootstrapPackage().nativeEventId);
  Log("EXPERIMENT_RACE_SELECTION configured=1 custom_key=%08X bootstrap=native_debug_start",registration_experiment::clones.front()->collection.key);
 }

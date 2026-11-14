@@ -3,16 +3,20 @@
 #include "GauntletUiAsset.h"
 #include "HotPursuitUiAsset.h"
 #include "DriftUiAsset.h"
+#include "TougeUiAsset.h"
 #include "DriftHudAsset.h"
 #include "DriftDigitAsset.h"
 #include "EventPresentationPolicy.h"
+#include "RpdUiAssets.h"
 namespace event_presentation {
 using Package=mwel::EventPackage;
 thread_local const Package* pending=nullptr;
 void* resource=nullptr;void* gauntletResource=nullptr;void* hotPursuitResource=nullptr;
 void* driftResource=nullptr;void* driftHudResource=nullptr;void* driftDigitResource=nullptr;bool driftNeeded=false;
 bool needed=false,armsNeeded=false,gauntletNeeded=false,hotPursuitNeeded=false;
-bool Supported(const Package& p){return event_presentation_policy::Supported(p.authoring.value("combatMode",std::string("none")));}
+void* tougeResource=nullptr;bool tougeNeeded=false;
+void* rpdCategoryResource=nullptr;void* rpdInterceptorResource=nullptr;void* rpdRapidResource=nullptr;bool rpdNeeded=false;
+bool Supported(const Package& p){return mwel_rpd::CaseFile(p.authoring)||event_presentation_policy::Supported(p.authoring.value("combatMode",std::string("none")));}
 std::map<std::string,unsigned> typeKeys;
 unsigned Hash(const std::string& text){unsigned h=~0u;for(unsigned char c:text)h=h*33+c;return h;}
 const Package* PackageFor(void* parameters){
@@ -31,16 +35,22 @@ const Package* PackageFor(void* parameters){
   collection=read(reinterpret_cast<void*>(collection),0x10);
  }return nullptr;
 }
-std::string Type(const Package& p){return p.authoring.value("combatMode",std::string("none"))+":"+p.authoring.at("mode").get<std::string>();}
+std::string Type(const Package& p){return mwel_rpd::CaseFile(p.authoring)?"rpd:"+p.authoring.value("policeMission",std::string("interceptor")):p.authoring.value("combatMode",std::string("none"))+":"+p.authoring.at("mode").get<std::string>();}
 unsigned TypeKey(const Package* p,unsigned fallback){if(!p)return fallback;auto found=typeKeys.find(Type(*p));return found==typeKeys.end()?fallback:found->second;}
 unsigned Icon(const Package* p,unsigned fallback){
  if(!p)return fallback;
+ if(mwel_rpd::CaseFile(p->authoring)){
+  const auto mission=p->authoring.value("policeMission",std::string("interceptor"));
+  const auto texture=mission=="rapidresponse"?rpd_ui_assets::RapidResponse::Texture:mission=="hotpursuit"?hot_pursuit_ui_asset::Texture:rpd_ui_assets::Interceptor::Texture;
+  return reinterpret_cast<void*(__cdecl*)(unsigned,int,int)>(0x503400)(texture,0,0)?texture:fallback;
+ }
  const auto mode=p->authoring.value("combatMode",std::string("none"));
  unsigned texture=0;void* loaded=nullptr;
  if(mode=="armsrace"){texture=combat_ui_asset::Texture;loaded=resource;}
  else if(mode=="gauntlet"){texture=gauntlet_ui_asset::Texture;loaded=gauntletResource;}
  else if(mode=="hotpursuit"){texture=hot_pursuit_ui_asset::Texture;loaded=hotPursuitResource;}
  else if(mode=="drift"){texture=drift_ui_asset::Texture;loaded=driftResource;}
+ else if(mode=="touge"){texture=touge_ui_asset::Texture;loaded=tougeResource;}
  if(!loaded)return fallback;
  return reinterpret_cast<void*(__cdecl*)(unsigned,int,int)>(0x503400)(texture,0,0)?texture:fallback;
 }
@@ -82,10 +92,14 @@ void LoadResource(bool required,void*& loaded,const char* digest,const unsigned 
 }
 void Load(){
  if(!needed)return;
+ LoadResource(rpdNeeded,rpdCategoryResource,rpd_ui_assets::Category::Digest,rpd_ui_assets::Category::Bytes,sizeof(rpd_ui_assets::Category::Bytes),rpd_ui_assets::Category::Texture,"rpd_cases");
+ LoadResource(rpdNeeded,rpdInterceptorResource,rpd_ui_assets::Interceptor::Digest,rpd_ui_assets::Interceptor::Bytes,sizeof(rpd_ui_assets::Interceptor::Bytes),rpd_ui_assets::Interceptor::Texture,"rpd_interceptor");
+ LoadResource(rpdNeeded,rpdRapidResource,rpd_ui_assets::RapidResponse::Digest,rpd_ui_assets::RapidResponse::Bytes,sizeof(rpd_ui_assets::RapidResponse::Bytes),rpd_ui_assets::RapidResponse::Texture,"rpd_rapidresponse");
  LoadResource(armsNeeded,resource,combat_ui_asset::Digest,combat_ui_asset::Bytes,sizeof(combat_ui_asset::Bytes),combat_ui_asset::Texture,"armsrace");
  LoadResource(gauntletNeeded,gauntletResource,gauntlet_ui_asset::Digest,gauntlet_ui_asset::Bytes,sizeof(gauntlet_ui_asset::Bytes),gauntlet_ui_asset::Texture,"gauntlet");
  LoadResource(hotPursuitNeeded,hotPursuitResource,hot_pursuit_ui_asset::Digest,hot_pursuit_ui_asset::Bytes,sizeof(hot_pursuit_ui_asset::Bytes),hot_pursuit_ui_asset::Texture,"hotpursuit");
  LoadResource(driftNeeded,driftResource,drift_ui_asset::Digest,drift_ui_asset::Bytes,sizeof(drift_ui_asset::Bytes),drift_ui_asset::Texture,"drift");
+ LoadResource(tougeNeeded,tougeResource,touge_ui_asset::Digest,touge_ui_asset::Bytes,sizeof(touge_ui_asset::Bytes),touge_ui_asset::Texture,"touge");
  LoadResource(driftNeeded,driftHudResource,drift_hud_asset::Digest,drift_hud_asset::Bytes,sizeof(drift_hud_asset::Bytes),drift_hud_asset::Texture,"drift_hud");
  LoadResource(driftNeeded,driftDigitResource,drift_digit_asset::Digest,drift_digit_asset::Bytes,sizeof(drift_digit_asset::Bytes),drift_digit_asset::Texture,"drift_digits");
 }
@@ -94,12 +108,15 @@ bool Install(){
   const auto type=Type(p);if(typeKeys.count(type))continue;
   const auto mode=p.authoring.at("mode").get<std::string>();
   const auto combat=p.authoring.value("combatMode",std::string("none"));
-  const auto en=event_presentation_policy::Name(combat,mode,false),ja=event_presentation_policy::Name(combat,mode,true);
+  if(mwel_rpd::CaseFile(p.authoring))rpdNeeded=true;
+  const auto en=type=="rpd:hotpursuit"?std::wstring(L"Hot Pursuit (RPD)"):type=="rpd:interceptor"?std::wstring(L"Interceptor"):event_presentation_policy::Name(combat,mode,false);
+  const auto ja=type=="rpd:hotpursuit"?std::wstring(L"\u30DB\u30C3\u30C8\u30D1\u30FC\u30B9\u30FC\u30C8 (RPD)"):type=="rpd:interceptor"?std::wstring(L"\u30A4\u30F3\u30BF\u30FC\u30BB\u30D7\u30BF\u30FC"):event_presentation_policy::Name(combat,mode,true);
   if(en.empty()||ja.empty())continue;
   if(combat=="gauntlet")gauntletNeeded=true;
   else if(combat=="hotpursuit")hotPursuitNeeded=true;
   else if(combat=="armsrace")armsNeeded=true;
   else if(combat=="drift")driftNeeded=true;
+  else if(combat=="touge")tougeNeeded=true;
   const unsigned key=Hash("MWEL_COMBAT_TYPE_"+type);
   if(!event_titles::titles.emplace(key,event_titles::Title{en,type,{},ja}).second)return false;
   typeKeys.emplace(type,key);needed=true;

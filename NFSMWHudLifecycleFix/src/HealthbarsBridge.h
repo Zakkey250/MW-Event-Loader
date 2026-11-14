@@ -14,12 +14,20 @@ void(__thiscall* originalDraw)(void*)=nullptr;
 bool attempted=false,active=false;
 using LeaderFn=unsigned(__cdecl*)(unsigned);
 LeaderFn leaderQuery=nullptr;unsigned leaderHandle=0;float leaderPosition[3]{};bool leaderVisible=false;uintptr_t moduleBase=0;
+using RpdScopeFn=unsigned(__cdecl*)(unsigned);RpdScopeFn rpdScope=nullptr;bool rpdVisible=false;
+using ArrestGaugeFn=unsigned(__cdecl*)(unsigned,float*,float*);
+ArrestGaugeFn arrestGauge=nullptr;
 float leaderMatrix[16]{};DWORD leaderMatrixAt=0;
 unsigned Address(const void* p){return static_cast<unsigned>(reinterpret_cast<uintptr_t>(p));}
 template<class T>void Store(void* p,size_t offset,T value){std::memcpy(static_cast<BYTE*>(p)+offset,&value,sizeof(value));}
 void Mirror(){
- tableCount=0;leaderVisible=false;leaderHandle=0;unsigned nativeCount=0,nativeTable=0,leaderDamage=0;
+ tableCount=0;leaderVisible=false;leaderHandle=0;rpdVisible=false;unsigned nativeCount=0,nativeTable=0,leaderDamage=0;
  if(combat_hud::Active()){
+  if(!rpdScope){auto event=GetModuleHandleW(L"MWEventLoader.asi");if(event){
+   rpdScope=reinterpret_cast<RpdScopeFn>(GetProcAddress(event,"MWEL_RpdAIScopeV1"));
+   arrestGauge=reinterpret_cast<ArrestGaugeFn>(GetProcAddress(event,"MWEL_RpdArrestGaugeV1"));
+  }}
+  rpdVisible=rpdScope&&rpdScope(0)!=0;
   if(!leaderQuery){auto event=GetModuleHandleW(L"MWEventLoader.asi");if(event)leaderQuery=reinterpret_cast<LeaderFn>(GetProcAddress(event,"MWEL_GauntletLeaderV1"));}
   if(leaderQuery)leaderHandle=leaderQuery(mwcombat::Version);
   if(leaderHandle&&Readable(0x92CD1C,12)){
@@ -57,6 +65,7 @@ void Mirror(){
  if(!combat_hud::Active())return;
  managerPointer=Address(manager.data());Store(manager.data(),0x130,1u);
  for(unsigned i=0;i<combat_hud::count;++i){const auto& car=combat_hud::cars[i];if(car.health.driver!=3||car.health.slot>=16||car.health.maximum<=0)continue;
+  if(rpdVisible&&!rpdScope(car.health.handle))continue;
   auto& v=views[car.health.slot];const unsigned row=Address(v.record.data()+0x80);
   Store(v.record.data(),0x4C,Address(v.linkA.data()));Store(v.linkA.data(),0x30,Address(v.linkB.data()));Store(v.linkB.data(),0,Address(v.linkC.data()));
   std::memcpy(v.linkC.data()+0x10,car.position,sizeof(car.position));
@@ -72,7 +81,7 @@ void __fastcall Draw(void* self,void*){
  Mirror();
  if(combat_hud::Active()&&(!combat_hud::visible||Read<unsigned>(0x925E90)!=6||reinterpret_cast<bool(__cdecl*)()>(0x468390)()))return;
  originalDraw(self);
- if(leaderVisible&&moduleBase&&Readable(0x984350,64)){
+ if((leaderVisible||rpdVisible)&&moduleBase&&Readable(0x984350,64)){
   // healthbars first transforms the anchor by 9842D0, then draws its
   // billboard with inverse(9842D0)*984350. The anchor's net transform is
   // therefore 984350. Its internal 60CC is for those camera-space quads,
@@ -81,6 +90,14 @@ void __fastcall Draw(void* self,void*){
  }
 }
 void LeaderOverlay(IDirect3DDevice9* device){
+ if(rpdVisible&&GetTickCount()-leaderMatrixAt<100&&combat_hud::visible&&combat_hud::Active()){
+  for(unsigned i=0;i<combat_hud::count;++i){const auto& car=combat_hud::cars[i];
+   if(car.health.driver==3&&car.health.remaining>0&&!(car.health.flags&1)&&rpdScope(car.health.handle)){
+    float fill=0,alpha=0;if(arrestGauge)arrestGauge(car.health.handle,&fill,&alpha);
+    combat_hud::RacerMarker(device,car.position,leaderMatrix,fill,alpha);
+   }
+  }
+ }
  if(leaderVisible&&GetTickCount()-leaderMatrixAt<100){
   // Draw at the shared final HUD pass; the native healthbars callback is
   // inside world rendering and later postprocessing can erase screen quads.

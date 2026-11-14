@@ -15,6 +15,13 @@
 #include "../../src/CarbonParticleFX.h"
 void* __cdecl MWELCarbonOriginalCollection(std::uint32_t,std::uint32_t);
 #endif
+#ifdef MWEL_CARBON_RUNTIME
+#include "../../src/SceneRoadCamera.h"
+bool MWELRpdCamera(float*);
+float MWELRpdFade();
+void MWELRpdPrepareRaceTeardown();
+void MWELRpdDiscardRestartSpawns();
+#endif
 namespace {
 HMODULE module=nullptr;std::unique_ptr<carbonprobe::Renderer> renderer;
 using EndScene=HRESULT(WINAPI*)(IDirect3DDevice9*);EndScene original=nullptr;
@@ -35,6 +42,7 @@ void __declspec(naked) EndSceneCall(){
 #endif
 std::string sceneDirectory;std::string directory;bool logging=false,failed=false;ULONGLONG started=0,lastLog=0;
 void Log(const char*);
+#include "RestartTrace.h"
 #ifndef MWEL_CARBON_RUNTIME
 // Private renderer evidence only. No capture path is compiled into the ASI.
 std::string captureFolder;bool captureFrames=false;unsigned captureIndex=0;
@@ -44,6 +52,22 @@ bool diagnoseHudMask=false;unsigned hudMaskPhase=0;void* diagnosticHud=nullptr;u
 bool IsTorchScene();bool PrepareSceneTorch();bool UpdateTorchAttachments();void LogTorchDiagnostic(const char*);
 #endif
 #include "SceneRuntime.h"
+using SceneAudioFill=void(__thiscall*)(unsigned,unsigned);
+SceneAudioFill sceneAudioOriginal=nullptr;
+void __fastcall SceneAudioInfo(unsigned self,void*,unsigned info){
+ sceneAudioOriginal(self,info);
+ scene.AudioInfo(self,info);
+}
+using SceneWheelRead=float(__thiscall*)(void*,unsigned);
+SceneWheelRead sceneWheelOriginal=nullptr;
+float __fastcall SceneWheelAngular(void* self,void*,unsigned wheel){
+ const auto caller=reinterpret_cast<unsigned>(_ReturnAddress());
+ const auto native=sceneWheelOriginal(self,wheel);
+ return scene.WheelAngular(self,wheel,native,caller);
+}
+#ifdef MWEL_CARBON_RUNTIME
+#include "RpdLiveIntro.h"
+#endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME
 bool IsTorchScene(){return renderer&&renderer->HasTorches();}
 bool PrepareSceneTorch(){
@@ -67,7 +91,12 @@ bool SelectVariant(unsigned participants,bool advance=false){
  selection=MWELCarbonSelection();
 #endif
  if(strcmp(selection,"stock")==0)return false;
- auto matches=[&](const SceneRuntime& candidate){return candidate.enabled&&mwel_carbon::Matches(selection,candidate.variantName,participants,candidate.assets.participants);};
+ auto matches=[&](const SceneRuntime& candidate){
+#ifdef MWEL_CARBON_RUNTIME
+  if(candidate.assets.rollingStart&&!MWELCarbonRollingStartAllowed())return false;
+  if(MWELCarbonLaunchOnly()&&!candidate.assets.StartsStopped())return false;
+#endif
+  return candidate.enabled&&mwel_carbon::Matches(selection,candidate.variantName,participants,candidate.assets.participants);};
  if((!advance||strcmp(selection,"auto")!=0)&&matches(scene))return true;
  if(scene.playing)return false;
  std::vector<size_t> candidates;
@@ -91,18 +120,19 @@ void Log(const char* text){if(!logging)return;
 void(__cdecl* stageOriginal)(bool);void(__cdecl* doneOriginal)();void(__thiscall* activeOriginal)(void*,bool);
 void State(const char* name,int value){if(!logging)return;auto r=*reinterpret_cast<BYTE**>(0x91E000);char line[256];sprintf_s(line,"NATIVE_BOUNDARY %s value=%d race=%p sim=%.3f active=%u timer=%u",name,value,r,*reinterpret_cast<float*>(0x9885D8),r?r[0x198A]:0,r?r[0x1978]:0);Log(line);}
 unsigned nativeNisDepth=0;bool pendingSceneBegin=false;void* retainedIntroRace=nullptr;
+bool pendingRpdBegin=false;
 #ifdef MWEL_CARBON_RUNTIME
 std::atomic<bool> nativeCallbacksReady{false};
 #endif
-void CancelStagedScene(bool raceBoundary=false){pendingSceneBegin=false;scene.Cancel();if(raceBoundary)retainedIntroRace=nullptr;}
+void CancelStagedScene(bool raceBoundary=false){pendingSceneBegin=false;pendingRpdBegin=false;scene.Cancel();if(raceBoundary)retainedIntroRace=nullptr;}
 bool PrepareNativeStageVariant(unsigned participants){
 #ifdef MWEL_CARBON_RUNTIME
- if(MWELCarbonUsesAuthoredPose())return true;
+ if(MWELCarbonUsesAuthoredPose()&&!scene.assets.rollingStart)return true;
  const auto valid=[&](){
   auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float pose[4]{};
   if(!MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source)))return false;
   scene.origin={pose[0],pose[1],pose[2]};scene.heading=pose[3];scene.SetStage();
-  return scene.ValidateStartRoad();
+  return scene.ValidateStartRoad()&&scene.ValidateCameraPath();
  };
  if(valid()){Log("SCENE_FINAL_GRID_PREFLIGHT passed=1 all_cars_unmodified=1");return true;}
  if(strcmp(MWELCarbonSelection(),"auto")!=0){Log("SCENE_NATIVE_FALLBACK selected_scene_final_grid_unsupported=1 all_cars_unmodified=1");return false;}
@@ -125,10 +155,26 @@ bool PrepareNativeStageVariant(unsigned participants){
  return true;
 #endif
 }
-void BeginStagedScene(){auto race=*reinterpret_cast<BYTE**>(0x91E000);if(race&&retainedIntroRace==race){Log("SCENE_NATIVE_FALLBACK original_intro_already_played=1 double_playback_prevented=1");return;}if(!race||!SelectVariant(*reinterpret_cast<unsigned*>(race+0x1958))){Log("SCENE_NATIVE_FALLBACK participants_mismatch_or_disabled=1");return;}if(!PrepareNativeStageVariant(*reinterpret_cast<unsigned*>(race+0x1958)))return;scene.Begin();if(scene.playing){if(logging){char info[240];sprintf_s(info,"SCENE_BEGIN variant=%s participants=%u native_staging=1 source_camera=1 native_NIS_cars=1",scene.variantName.c_str(),scene.assets.participants);Log(info);}}else Log("SCENE_REFUSED native_NIS_bind_or_pose_failed=1");if(logging){char text[160];sprintf_s(text,"SCENE_BIND error=%u slot=%u table=%08X applied=%u",scene.error,scene.errorSlot,scene.errorTable,scene.applied);Log(text);}}
+void BeginStagedScene(){
+#ifdef MWEL_CARBON_RUNTIME
+ const bool required=MWELRpdIntroRequired();
+ auto refuse=[&](const char* reason){if(required)MWELRpdIntroFailed(reason);};
+#else
+ auto refuse=[](const char*){};
+#endif
+ auto race=*reinterpret_cast<BYTE**>(0x91E000);if(race&&retainedIntroRace==race){refuse("native_intro_was_retained");Log("SCENE_NATIVE_FALLBACK original_intro_already_played=1 double_playback_prevented=1");return;}if(!race||!SelectVariant(*reinterpret_cast<unsigned*>(race+0x1958))){refuse("required_scene_or_two_car_grid_unavailable");Log("SCENE_NATIVE_FALLBACK participants_mismatch_or_disabled=1");return;}if(!PrepareNativeStageVariant(*reinterpret_cast<unsigned*>(race+0x1958))){refuse("required_intro_road_preflight_failed");return;}scene.Begin();if(scene.playing){if(logging){char info[240];sprintf_s(info,"SCENE_BEGIN variant=%s participants=%u native_staging=1 source_camera=1 native_NIS_cars=1",scene.variantName.c_str(),scene.assets.participants);Log(info);}}else {refuse("required_intro_bind_or_pose_failed");Log("SCENE_REFUSED native_NIS_bind_or_pose_failed=1");}if(logging){char text[160];sprintf_s(text,"SCENE_BIND error=%u slot=%u table=%08X applied=%u",scene.error,scene.errorSlot,scene.errorTable,scene.applied);Log(text);}}
 void __cdecl Stage(bool value){State("staging",value);if(value)CancelStagedScene();else pendingSceneBegin=false;stageOriginal(value);if(value){if(nativeNisDepth){pendingSceneBegin=true;Log("SCENE_BEGIN_DEFERRED native_NIS_cleanup_in_progress=1");}else BeginStagedScene();}}
-void __cdecl Done(){pendingSceneBegin=false;State("countdown_done",1);if(scene.playing){if(logging){char text[160];sprintf_s(text,"SCENE_GO_TIMING elapsed=%.4f target=%.4f",scene.elapsed,scene.goAt);Log(text);}scene.Release();Log("SCENE_GO native_callback=1 cars_unbound=1");}doneOriginal();}
-void __fastcall Active(void* self,void*,bool value){State("active",value);if(!value)CancelStagedScene(true);activeOriginal(self,value);}
+void __cdecl Done(){pendingSceneBegin=false;State("countdown_done",1);if(scene.playing){if(logging){char text[160];sprintf_s(text,"SCENE_GO_TIMING elapsed=%.4f target=%.4f",scene.elapsed,scene.goAt);Log(text);}scene.Release();Log("SCENE_GO native_callback=1 cars_unbound=1");}doneOriginal();scene.CompleteRollingRelease();}
+void __fastcall Active(void* self,void*,bool value){State("active",value);if(!value){
+#ifdef MWEL_CARBON_RUNTIME
+ MWELRpdPrepareRaceTeardown();
+#endif
+ CancelStagedScene(true);}
+ activeOriginal(self,value);
+#ifdef MWEL_CARBON_RUNTIME
+ if(!value)MWELRpdDiscardRestartSpawns();
+#endif
+}
 void(__thiscall* nisPlayOriginal)(void*);
 void(__thiscall* hudFeaturesOriginal)(void*,unsigned long long);
 void __fastcall HudFeatures(void* self,void*,unsigned long long features){
@@ -147,10 +193,14 @@ void __fastcall NisPlay(void* self,void*){
  auto n=static_cast<BYTE*>(self);auto r=*reinterpret_cast<BYTE**>(0x91E000);
  bool ordinary=*reinterpret_cast<unsigned*>(n+0x2FC)==0&&!n[0x3E5]&&!n[0x3E6]&&!n[0x3E7]&&!n[0x3E8]&&!n[0x3E9]&&!n[0x314]&&!n[0x354];
  bool requestedSource=false;
+ bool rpdReplacement=false;
 #ifdef MWEL_CARBON_RUNTIME
  requestedSource=MWELCarbonReplaceSourceIntro(*reinterpret_cast<unsigned*>(n+0x394));
+ const auto rpdSelection=MWELCarbonSelection();
+ rpdReplacement=r&&ordinary&&!MWELRpdIntroRequired()&&MWELRpdLiveIntroCurrent()&&
+  (!rpdSelection||!*rpdSelection||!strcmp(rpdSelection,"stock")||!strcmp(rpdSelection,"auto"));
 #endif
- bool replace=!scene.playing&&r&&(ordinary||requestedSource)&&SelectVariant(*reinterpret_cast<unsigned*>(r+0x1958),true);
+ bool replace=!rpdReplacement&&!scene.playing&&r&&(ordinary||requestedSource)&&SelectVariant(*reinterpret_cast<unsigned*>(r+0x1958),true);
  if(replace)for(unsigned i=0;i<scene.assets.participants;i++)if(!scene.FindVehicle(*reinterpret_cast<unsigned*>(r+0x18+i*0x194)))replace=false;
 #ifdef MWEL_CARBON_RUNTIME
  if(replace){auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float pose[4]{};replace=MWELCarbonStartPose(pose,reinterpret_cast<const float*>(&source));
@@ -159,14 +209,20 @@ void __fastcall NisPlay(void* self,void*){
    // Authored gates already supply the grid locator. The native-marker-only
    // flat-grid check rejected a six-car field spanning a slope on first Play,
    // while retry entered Begin directly and accepted the very same locator.
-   replace=MWELCarbonUsesAuthoredPose()||scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
+   replace=(MWELCarbonUsesAuthoredPose()&&!scene.assets.rollingStart)||scene.ValidateStartRoad();if(!replace)Log("SCENE_NATIVE_FALLBACK source_grid_not_on_drivable_road=1 native_NIS_retained=1");}
  }
 #endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME
  if(replace&&!PrepareSceneTorch()){replace=false;Log("SCENE_NATIVE_FALLBACK torch_preparation_failed=1");}
 #endif
  if(logging){char text[256];sprintf_s(text,"NATIVE_NIS_PLAY type=%u scene=%08X state=%u replace=%u participants=%u ordinary=%u requested_source=%u previous_playing=%u",*reinterpret_cast<unsigned*>(n+0x2FC),*reinterpret_cast<unsigned*>(n+0x394),*reinterpret_cast<unsigned*>(n+0x2F4),unsigned(replace),r?*reinterpret_cast<unsigned*>(r+0x1958):0,unsigned(ordinary),unsigned(requestedSource),unsigned(scene.playing));Log(text);}
- retainedIntroRace=replace?nullptr:r;
+ #ifdef MWEL_CARBON_RUNTIME
+ const bool requiredRpd=MWELRpdIntroRequired()&&(ordinary||requestedSource);
+ if(requiredRpd&&!replace)MWELRpdIntroFailed("required_intro_native_preflight_failed");
+#else
+ const bool requiredRpd=false;
+#endif
+ retainedIntroRace=replace||rpdReplacement||requiredRpd?nullptr:r;
 #ifdef MWEL_CARBON_RUNTIME
  MWELCarbonGridSnapshot("native_play_before");
 #endif
@@ -175,17 +231,22 @@ void __fastcall NisPlay(void* self,void*){
 #ifdef MWEL_CARBON_RUNTIME
  if(replace&&logging){auto source=scene.assets.Car(0,scene.assets.ActorTime(scene.goAt));float observed[4]{};if(MWELCarbonStartPose(observed,reinterpret_cast<const float*>(&source))){char note[240];sprintf_s(note,"SCENE_AFTER_NATIVE_PLAY_POSE origin=%.5f,%.5f,%.5f heading=%.5f",observed[0],observed[1],observed[2],observed[3]);Log(note);}}
 #endif
- if(replace){
+ if(replace||rpdReplacement||requiredRpd){
   // A user-selected replacement may skip a protected story START intro.
   // Use the original skip/cleanup path; restore the local restriction after
   // this call and never change global story progress or movie playback.
   BYTE restricted=n[0x3E8];if(requestedSource)n[0x3E8]=0;
   bool skipped=reinterpret_cast<bool(__thiscall*)(void*)>(0x6EA960)(n+0x48);
-  if(requestedSource)n[0x3E8]=restricted;if(!skipped)retainedIntroRace=r;
+  if(requestedSource)n[0x3E8]=restricted;if(!skipped){retainedIntroRace=r;
+#ifdef MWEL_CARBON_RUNTIME
+ if(requiredRpd)MWELRpdIntroFailed("required_intro_native_cleanup_refused");
+#endif
+ }
   Log(skipped?"NATIVE_INTRO_SKIPPED completion_tags=1 native_cleanup=1":"NATIVE_INTRO_RETAINED skip_refused=1");}
  --nativeNisDepth;
 #ifdef MWEL_CARBON_RUNTIME
  MWELCarbonGridSnapshot("native_cleanup_after");
+ if(!nativeNisDepth&&pendingRpdBegin){pendingRpdBegin=false;if(MWELRpdPrepareLiveGrid())rpdLiveIntro.Begin();}
 #endif
  // Stage can be dispatched inside Play/Skip before AnimatedCars_UnBind has
  // finished. Acquire Carbon's car controls only after that native cleanup.
@@ -205,10 +266,17 @@ int(__thiscall* cameraOriginal)(void*,D3DXMATRIX*,float);unsigned cameraLogs=0;
 int __fastcall Camera(void* self,void*,D3DXMATRIX* m,float dt){
  scene.Tick();D3DXMATRIX replacement;
  bool replacing=scene.CameraOwned()&&self==reinterpret_cast<void*>(0x986870);
- if(replacing){if(scene.released)scene.BlendRelease(replacement,*m);else scene.CameraMatrix(replacement);m=&replacement;}
+ if(replacing){if(scene.released)scene.BlendRelease(replacement,*m);else if(!scene.CameraMatrix(replacement))replacing=false;if(replacing)m=&replacement;}
+#ifdef MWEL_CARBON_RUNTIME
+ if(!replacing&&self==reinterpret_cast<void*>(0x986870)&&rpdLiveIntro.View(replacement,*m))m=&replacement;
+#endif
  auto r=*reinterpret_cast<BYTE**>(0x91E000);
  if(logging&&r&&r[0x198A]&&cameraLogs++<5){char line[256];sprintf_s(line,"CAMERA self=%p eview_camera=%p matrix_pos=%.3f,%.3f,%.3f dt=%.5f",self,*reinterpret_cast<void**>(0x919650),m->_41,m->_42,m->_43,dt);Log(line);}
- auto result=cameraOriginal(self,m,dt);if(replacing&&!scene.released)scene.Lens();return result;
+#ifdef MWEL_CARBON_RUNTIME
+ D3DXMATRIX handoff;
+ if(!replacing&&self==reinterpret_cast<void*>(0x986870)){handoff=*m;MWELRpdCamera(reinterpret_cast<float*>(&handoff));m=&handoff;}
+#endif
+ auto result=cameraOriginal(self,m,dt);if(replacing&&!scene.released){scene.Lens();scene.cameraApplied=true;}return result;
 }
 void(__cdecl* commitOriginal)()=reinterpret_cast<void(__cdecl*)()>(0x6E2F50);
 void* commitTrampoline=nullptr;
@@ -248,12 +316,19 @@ void __declspec(naked) CommitModels(){
  }
 }
 HRESULT WINAPI Draw(IDirect3DDevice9* device){
+#ifdef MWEL_CARBON_RUNTIME
+ if(scene.enabled&&!scene.playing&&!logging&&MWELRpdFade()<=0)return original(device);
+#else
  if(scene.enabled&&!scene.playing&&!logging)return original(device);
+#endif
  if(!failed&&renderer&&SUCCEEDED(device->TestCooperativeLevel())){
   try{
    if(!started)started=GetTickCount64();
    D3DVIEWPORT9 full{};device->GetViewport(&full);
    if(full.Width<64||full.Height<64)return original(device);
+#ifdef MWEL_CARBON_RUNTIME
+   if(MWELRpdFade()>0)renderer->Fade(device,full,MWELRpdFade()*100.f);
+#endif
 #ifdef MWEL_CARBON_TORCH_RUNTIME
    if(!IsTorchScene())scene.Tick(false);
 #else
@@ -267,6 +342,7 @@ HRESULT WINAPI Draw(IDirect3DDevice9* device){
      // can survive a menu/app switch; never consume them in the game adapter.
      if((GetAsyncKeyState(VK_SPACE)&1)&&!scene.released){scene.Skip();Log("SCENE_SKIP native_countdown_retained=1");}
 #endif
+     if(*reinterpret_cast<unsigned*>(0x925E90)==6&&(scene.awaitingInitialWorld||scene.PresentationFrame()))renderer->Fade(device,full,100.f);
      frame=renderer->FrameAt(scene.assets.ActorTime(scene.elapsed));
      if(!scene.awaitingCars&&!scene.skipped&&!scene.released)renderer->Fade(device,full,scene.assets.Camera(scene.elapsed).fade);
 #ifndef MWEL_CARBON_RUNTIME
@@ -291,10 +367,12 @@ HRESULT WINAPI Draw(IDirect3DDevice9* device){
     if(scene.playing&&scene.bound&&!scene.awaitingCars){
      for(unsigned i=0;i<scene.assets.participants;i++){
       scene.engineRevs.Observe(*reinterpret_cast<void**>(scene.vehicles[i]+4));
+      scene.wheelMotion.Observe(*reinterpret_cast<void**>(scene.vehicles[i]+4));
       auto body=*reinterpret_cast<void**>(static_cast<BYTE*>(scene.controls[i])+0x44);auto table=*reinterpret_cast<void***>(body);
       auto p=reinterpret_cast<const D3DXVECTOR3*(__thiscall*)(void*)>(table[0x20/4])(body);auto v=reinterpret_cast<const D3DXVECTOR3*(__thiscall*)(void*)>(table[0x24/4])(body);
       auto t=scene.carTargets[i];char state[256];sprintf_s(state,"SCENE_CAR elapsed=%.3f slot=%u pos=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f velocity=%.3f,%.3f,%.3f clearance=%.3f max_pre_pin_error=%.3f",scene.elapsed,i,p->x,p->y,p->z,t.x,t.y,t.z,v->x,v->y,v->z,scene.carClearance[i],scene.maxPlacementError);Log(state);
      }
+     char effects[380];sprintf_s(effects,"SCENE_VEHICLE_EFFECTS variant=%s wheel_updates=%u max_angular=%.3f motion_engine_fallback=%u audio_updates=%u skid_updates=%u max_skid=%.3f render_reads=%u render_angular_max=%.3f",scene.variantName.c_str(),scene.wheelMotion.updates,scene.wheelMotion.maximumAngular,unsigned(scene.engineRevs.values.empty()),scene.soundUpdates,scene.skidUpdates,scene.maximumSkid,scene.renderWheelReads,scene.renderWheelMaximum);Log(effects);
     }
    }
   }catch(const std::exception& e){scene.Cancel();failed=true;Log(e.what());}
@@ -327,6 +405,16 @@ DWORD WINAPI Init(void*){
    }
   }
   std::sort(folders.begin(),folders.end());
+  if(folders.empty()&&MWELRpdLiveIntroAvailable()){
+   const BYTE cameraGuard[]={0x55,0x8B,0xEC,0x83,0xE4,0xF0,0x81,0xEC},nisGuard[]={0x6A,0xFF,0x68,0xDF,0xEB,0x87,0,0x64};auto address=reinterpret_cast<void*>(0x4700D0),nis=reinterpret_cast<void*>(0x6F5750);
+   if(memcmp(address,cameraGuard,sizeof(cameraGuard))||memcmp(nis,nisGuard,sizeof(nisGuard)))return 0;
+   const auto status=MH_Initialize();if(status!=MH_OK&&status!=MH_ERROR_ALREADY_INITIALIZED)return 0;
+   if(MH_CreateHook(address,Camera,reinterpret_cast<void**>(&cameraOriginal))!=MH_OK)return 0;
+   if(MH_CreateHook(nis,NisPlay,reinterpret_cast<void**>(&nisPlayOriginal))!=MH_OK){MH_RemoveHook(address);return 0;}
+   if(MH_QueueEnableHook(address)!=MH_OK||MH_QueueEnableHook(nis)!=MH_OK||MH_ApplyQueued()!=MH_OK){MH_DisableHook(address);MH_DisableHook(nis);MH_RemoveHook(address);MH_RemoveHook(nis);cameraOriginal=nullptr;nisPlayOriginal=nullptr;return 0;}
+   nativeCallbacksReady.store(true,std::memory_order_release);
+   Log("RPD_LIVE_CAMERA_READY resource_files=0 original_MW_physics=1");return 0;
+  }
   if(folders.empty())return 0;
 #else
   auto ini=directory+"/CarbonIntroProbe.ini";
@@ -360,6 +448,10 @@ DWORD WINAPI Init(void*){
   renderer=std::make_unique<carbonprobe::Renderer>();scene.Load(assets,ini);renderer->Load(assets,"character.cni",scene.assets.hasActor);
 #endif
   Log("PRIVATE_PROBE ready");
+  const BYTE audioGuard[]={0x6A,0xFF,0x64,0xA1,0,0,0,0,0x68,0x38,0xC0,0x87,0};
+  if(memcmp(reinterpret_cast<void*>(0x694160),audioGuard,sizeof(audioGuard))){Log("SCENE_AUDIO_REFUSED native_surface_conflict=1");return 0;}
+  const BYTE wheelGuard[]={0x8B,0x44,0x24,4,0x8B,0x8C,0x81,0x34,1,0,0};
+  if(memcmp(reinterpret_cast<void*>(0x6AE200),wheelGuard,sizeof(wheelGuard))){Log("SCENE_WHEEL_REFUSED native_surface_conflict=1");return 0;}
   if(memcmp(reinterpret_cast<void*>(0x6DED37),"\xE8\x14\x42\x00\x00",5)){Log("CARBON_INTRO_REFUSED world_pass_conflict=1");return 0;}
 #ifdef MWEL_CARBON_RUNTIME
   struct Guard{unsigned address;const char* bytes;};
@@ -387,11 +479,26 @@ DWORD WINAPI Init(void*){
     hooks.erase(std::remove_if(hooks.begin(),hooks.end(),[](const H& h){return h.address==reinterpret_cast<void*>(0x60DF70)||h.address==reinterpret_cast<void*>(0x60E160);}),hooks.end());
 #endif
     hooks.push_back(nisHook);
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+    if(logging){
+     hooks.push_back({reinterpret_cast<void*>(0x60AB10),RestartReset,reinterpret_cast<void**>(&restartResetOriginal)});
+     hooks.push_back({reinterpret_cast<void*>(0x60AA50),RestartRestore,reinterpret_cast<void**>(&restartRestoreOriginal)});
+     // RegistrationExperiment already owns WarpPlayerToTrigger. Trace its
+     // existing wrapper instead of attempting a second hook on that entry.
+     hooks.push_back({reinterpret_cast<void*>(0x5EEA60),RestartNotify,reinterpret_cast<void**>(&restartNotifyOriginal)});
+    }
+#endif
+    hooks.push_back({reinterpret_cast<void*>(0x694160),SceneAudioInfo,reinterpret_cast<void**>(&sceneAudioOriginal)});
+    hooks.push_back({reinterpret_cast<void*>(0x6AE200),SceneWheelAngular,reinterpret_cast<void**>(&sceneWheelOriginal)});
     // Production HUD dispatch is owned by gauntlet_hud and calls MWELCarbonFilterHud.
     hooks.push_back({reinterpret_cast<void*>(0x6DED37),CommitModels,&commitTrampoline});
     unsigned count=scene.enabled||GetPrivateProfileIntA("Probe","TraceBoundaries",0,ini.c_str())==1?unsigned(hooks.size()):1;
     unsigned created=0;bool ok=true;
-    for(;created<count;++created)if(MH_CreateHook(hooks[created].address,hooks[created].hook,hooks[created].old)!=MH_OK){ok=false;break;}
+    for(;created<count;++created){const auto hookStatus=MH_CreateHook(hooks[created].address,hooks[created].hook,hooks[created].old);if(hookStatus!=MH_OK){
+#ifdef MWEL_PRIVATE_RESTART_TRACE
+     if(logging){char text[120];sprintf_s(text,"PRIVATE_RESTART_HOOK_FAILED address=%08X status=%u",unsigned(hooks[created].address),unsigned(hookStatus));Log(text);}
+#endif
+     ok=false;break;}}
     if(ok)for(unsigned i=0;i<count;i++)if(MH_QueueEnableHook(hooks[i].address)!=MH_OK){ok=false;break;}
     if(ok)ok=MH_ApplyQueued()==MH_OK;
     if(!ok){for(unsigned i=0;i<created;i++){MH_DisableHook(hooks[i].address);MH_RemoveHook(hooks[i].address);}Log("Scene hooks rolled back");return 0;}

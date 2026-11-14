@@ -1,9 +1,10 @@
 #pragma once
+#include "WorldProviderModule.h"
 #include "../../integration/MWNeoObstacles.h"
 // This optional authored-module interface is absent in vanilla MW. Preserve
 // native props and their ownership; consume copied avoidance volumes only.
 static unsigned NeoLiveObstacles(const float* origin,float range,YellowTrafficPoint* output,unsigned capacity){
- auto world=GetModuleHandleW(L"World2MWNativeLoader.asi");
+ auto world=mwel_world_provider::Module();
  auto query=world?reinterpret_cast<mwneo_obstacles::Query>(GetProcAddress(world,"W2MW_NeoObstaclesV1")):nullptr;
  if(!query||!output||!capacity)return 0;
  mwneo_obstacles::Volume volumes[64]{};unsigned count=query(mwneo_obstacles::Version,origin,std::clamp(range,1.f,300.f),volumes,std::min(capacity,64u));

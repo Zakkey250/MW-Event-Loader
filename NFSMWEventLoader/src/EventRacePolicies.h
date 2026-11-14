@@ -27,24 +27,41 @@ static bool TrySetHeat(float wanted,float& actual){__try{return SetHeat(wanted,a
 void HeatFrame(){
  if(!pendingHeat||GetTickCount()-nextHeat>0x7fffffff)return;
  auto package=Current();if(!package||MWELNeoCurrentKey()!=heatOwner){pendingHeat=false;return;}
+ if(mwel_rpd::CaseFile(package->authoring)){pendingHeat=false;return;} // Heat belongs to the suspect, never the officer.
  auto heat=package->authoring.find("startHeatLevel");if(heat==package->authoring.end()||heat->is_null()){pendingHeat=false;return;}
  float actual=-1,wanted=heat->get<float>();bool applied=TrySetHeat(wanted,actual);
  ++heatAttempts;nextHeat=GetTickCount()+100;
  if(applied||heatAttempts>=16){pendingHeat=false;Log("EVENT_START_HEAT owner=%08X requested=%.1f actual=%.1f applied=%u attempts=%u persistent_override=0",heatOwner,wanted,actual,unsigned(applied),heatAttempts);}
 }
 void __cdecl Stage(bool value){
+ if(value)rpd_controls::Stage();
  if(value){
+  if(const auto package=Current();package&&touge_grid::Active(*package)){
+   if(!touge_grid::Ensure(*package)){Log("EXPERIMENT_RACE_ABORT touge_native_grid_unavailable_at_stage");return;}
+   const auto owner=MWELNeoCurrentKey();unsigned refreshed=0;
+   for(const auto& row:registration_experiment::geometryObjects){auto clone=registration_experiment::Find(row.first);
+    if(!clone||clone->ownerKey!=owner||clone->character||clone->placement||clone->templateKey==0xAAF8BB9C)continue;
+    auto object=static_cast<BYTE*>(row.second);BYTE active=0;if(!Copy(object+0xC4,&active,1)||!active)continue;
+    // Native WCollisionMgr::Move removes old membership before re-inserting
+    // this exact primitive at its unchanged world pose. No synthetic contact.
+    reinterpret_cast<void(__thiscall*)(void*,void*)>(0x783B60)(*reinterpret_cast<void**>(0x9B3890),object+0x28);++refreshed;
+   }
+   Log("TOUGE_NATIVE_GATE_REINDEXED count=%u CP_values_written=0",refreshed);
+  }
   // An in-place retry reuses the event key, race allocation, handles and CP.
   // Clear measured progress and invalidate worker generations at the native
   // staging boundary, before the new grid/countdown can request guidance.
-  MWELResetNeoDriverRace();MWELResetNeoProviderRace();MWELCombatNewGeneration();
+  MWELResetNeoDriverRace();MWELResetNeoProviderRace();MWELCombatNewGeneration();MWELTougeNewGeneration();
   Log("EVENT_NATIVE_STAGE_NEW_GENERATION owner=%08X neo_progress_reset=1 worker_generation_invalidated=1",MWELNeoCurrentKey());
  }
+ native_runtime_diagnostics::Controls("stage_before");
  MWELCarbonStageBefore(value);originalStage(value);
  pendingHeat=false;if(value){heatOwner=MWELNeoCurrentKey();heatAttempts=0;nextHeat=GetTickCount();pendingHeat=heatOwner!=0;HeatFrame();}
  MWELCarbonStageAfter(value);
+ rpd_controls::Restore("stage_after");
+ native_runtime_diagnostics::Controls("stage_after");
 }
-void __cdecl Done(){HeatFrame();pendingHeat=false;MWELCarbonDoneBefore();originalDone();}
+void __cdecl Done(){HeatFrame();pendingHeat=false;native_runtime_diagnostics::Controls("GO_before");MWELCarbonDoneBefore();originalDone();MWELCarbonDoneAfter();rpd_controls::Restore("GO_after");native_runtime_diagnostics::Controls("GO_after");}
 bool InstallStaging(){
  const BYTE stage[]={0x8B,0x0D,0,0xE0,0x91,0,0x83,0xEC},done[]={0x8B,0x0D,0,0xE0,0x91,0,0x56,0x33};
  const BYTE heat[]={0xA1,0x84,0xD8,0x92,0,0x85,0xC0};
@@ -108,6 +125,44 @@ static bool IsExtraCharacter(void* info,unsigned& slot){__try{return ExtraCharac
 unsigned __cdecl Opponent(unsigned original,void* info){
  auto package=Current();if(!package)return original;
  if(originalOpponentTestKey)return SafeNativeOpponent(originalOpponentTestKey); // Explicit, marker-gated single-model lab field.
+#ifdef MWEL_PRIVATE_RPD_RESIDENCY
+ // Hold the observed high-footprint Main race roster constant across both
+ // sides of the local residency comparison.
+ static const bool lab=GetFileAttributesW((game/L"MWEventLoader.local-test").c_str())!=INVALID_FILE_ATTRIBUTES;
+ if(lab&&MWELNeoCurrentKey()==0xB558AA0E){
+  const auto race=*reinterpret_cast<BYTE**>(0x91E000);
+#ifdef MWEL_PRIVATE_LP700_PRESSURE
+  // Isolated high-tier byte-pressure fixture. Never present in release builds.
+  constexpr unsigned roster[]={0x4D6FBDAE,0x729F13B6,0xE03893D2,0xD6A2F890,0x6D8B9FD3,0x34439EBB,0xCD0B7D61,0x55A612D2};
+#else
+  constexpr unsigned roster[]={0x0AE4443C,0x41555BEB,0x0281EA6A,0x35124316,0xA2D70BBD,0xCE80D4D4,0x676AF8A0,0xEFD63323};
+#endif
+  const auto offset=uintptr_t(info)-uintptr_t(race+0x18);
+  const auto slot=offset/0x194;
+  if(race&&offset%0x194==0&&slot>=1&&slot<=std::size(roster)){
+   const auto model=SafeNativeOpponent(roster[slot-1]);
+   Log("RPD_RESIDENCY_TRIAL slot=%u model=%08X",unsigned(slot),model);
+   return model;
+  }
+ }
+#endif
+ if(mwel_rpd::CaseFile(package->authoring)){
+  const auto race=*reinterpret_cast<BYTE**>(0x91E000);
+  if(race&&info==race+0x18+0x194){
+   // Police preset heat is the actual RPD start heat, even before the native
+   // player body exists. Career-car heat must not select the suspect model.
+   const auto preset=package->authoring.value("policeVehicle",std::string());
+   unsigned heat=MWELRpdAuthoredHeat(package->authoring);
+   if(!heat)heat=MWELRpdPresetHeat(preset);
+   if(heat<1||heat>10){auto authored=package->authoring.find("startHeatLevel");heat=authored!=package->authoring.end()&&authored->is_number()?unsigned(std::clamp(authored->get<float>(),1.f,10.f)):1u;}
+   const auto module=GetModuleHandleW(L"NFSMWNativeFreeRoamRacers.asi");
+   const auto choose=module?reinterpret_cast<unsigned(__cdecl*)(unsigned)>(GetProcAddress(module,"NFR_SelectHeatOpponentV1")):nullptr;
+   auto selected=choose?choose(heat):0u;
+   if(selected&&(!RaceVehicle(selected)||!InstalledModel(VehicleCollection(selected))))selected=0;
+   Log("RPD_START_HEAT_OPPONENT heat=%u police=%s original=%08X selected=%08X fallback=%u spawn_only=1",heat,preset.c_str(),original,selected,unsigned(!selected));
+   return selected?selected:SafeNativeOpponent(original);
+  }
+ }
  unsigned slot=0;bool extra=IsExtraCharacter(info,slot);
  bool regulation=mwel::Feature(package->authoring,"nativeOpponentAssist");
  if(!extra&&!regulation)return SafeNativeOpponent(original);

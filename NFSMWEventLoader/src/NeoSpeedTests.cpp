@@ -1,5 +1,6 @@
 #include "../../World2MW/src/NeoAI/Driver.h"
 #include "../../World2MW/src/NeoAI/JamWatch.h"
+#include "../../World2MW/src/NeoAI/RespawnHistory.h"
 #include <cstdio>
 #include <stdexcept>
 #include <vector>
@@ -20,6 +21,11 @@ static void Require(bool condition,const char* label){if(!condition)throw std::r
 static Guidance Straight(){Guidance g;g.status=1;g.confidence=1;g.count=13;g.aim={0,0,20};g.forward={0,0,1};
  for(unsigned i=0;i<g.count;++i){auto& s=g.samples[i];s.position={0,0,float(i*5)};s.distance=float(i*5);s.widthLeft=s.widthRight=6;s.roadCurvature=0;s.flags=Main|CheckedExecution|LocalCorrection;}return g;}
 int main(){try{
+ {RespawnHistory history;history.Record({0,0,720},726.111f);history.Record({0,0,749},755.139f);
+  Require(history.count==2&&history.anchor==726.111f,"nearby recovery attempts must retain the exclusion history");
+  Require(mwel_branch::RepeatedJam(history.count,history.lastProgress,758.614f,0),"a second nearby jam beyond the first anchor must allow checked branch recovery");
+  Require(!mwel_branch::RepeatedJam(history.count,history.lastProgress,790,0),"genuine advance beyond the latest recovery must retain the branch");
+  history.Record({0,0,790},790);Require(history.count==1&&history.lastProgress==790,"real progress must restart the bounded attempt history");}
  Require(mwel_branch::RepeatedJam(2,260,263,0),"repeated native blockage did not allow checked main-fork recovery");
  Require(!mwel_branch::RepeatedJam(1,260,263,0)&&!mwel_branch::RepeatedJam(2,260,291,0)&&!mwel_branch::RepeatedJam(2,260,263,20),"moving or genuinely advancing branch was abandoned");
  {auto old=[](float s,Point& p){if(s>56)return false;p={0,3,s};return true;};
