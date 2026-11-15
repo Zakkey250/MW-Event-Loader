@@ -3,11 +3,11 @@
 [日本語](README.ja.md) · [Event Editor](https://zakkey250.github.io/MW-Event-Editor/) · [All releases](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.2.0:** Adds Downhill Battle, public W2C v2 RC4 support and RPD Case Files (prototype). [Release notes](docs/Release-Notes-1.2.0.md)
+> **1.2.1** Adds standalone course maps and optional safehouse return, and fixes stationary-start Drift intro selection. [Release notes](docs/Release-Notes-1.2.1.md)
 
 | Download | Contents |
 | --- | --- |
-| [MW Event Loader 1.2.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.0) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
+| [MW Event Loader 1.2.1](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.1) | Event Loader + bonus ArmsAssist + HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Standalone Windows x64 tool; approve reader installation on first conversion |
 
 Download the named ZIP under **Assets**. GitHub’s automatic “Source code” archives are not the playable MOD. Install NFRR/LB and an x86 ASI loader separately; weapon modes additionally need MWArsenal and its assets.

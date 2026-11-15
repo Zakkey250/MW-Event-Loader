@@ -9,21 +9,21 @@ int main(int argc,char** argv){
  constexpr auto repo="Zakkey250/MW-Event-Loader";constexpr auto prefix="MW-Event-Loader-";
  auto row=[&](std::string tag,bool pre=false){return json{{"tag_name",tag},{"draft",false},{"prerelease",pre},{"published_at","2026-10-25T00:00:00Z"},{"html_url",std::string("https://github.com/")+repo+"/releases/tag/"+tag},{"assets",json::array({json{{"name",std::string(prefix)+tag+".zip"},{"state","uploaded"},{"size",12000u}}})}};};
  auto find=[&](json rows){return FindUpdate(rows.dump(),event_loader_update::Version,repo,prefix);};
- expect(!find(json::array({row("v1.1.0")})),"installed version does not notify");
- expect(!find(json::array({row("v0.9.0")})),"older version does not notify");
- auto next=find(json::array({row("v1.1.1")}));expect(next&&next->tag=="v1.1.1","new stable loader ZIP is detected");
+ expect(!find(json::array({row(std::string("v")+event_loader_update::Version)})),"installed version does not notify");
+ expect(!find(json::array({row("v1.2.0")})),"older version does not notify");
+ auto next=find(json::array({row("v1.2.2")}));expect(next&&next->tag=="v1.2.2","new stable loader ZIP is detected");
  auto converter=row("cutscene-converter-v99.0.0");converter["assets"][0]["name"]="MWCutsceneConverter-99.0.0-Windows-x64.zip";
  expect(!find(json::array({converter})),"converter release is never a loader update");
  auto foreign=row("v99.0.0");foreign["assets"][0]["name"]="MWCutsceneConverter-99.0.0-Windows-x64.zip";
  expect(!find(json::array({foreign})),"converter asset with version tag is also ignored");
- next=find(json::array({converter,row("v1.1.2"),row("v1.1.1")}));expect(next&&next->tag=="v1.1.2","mixed unordered releases select newest loader");
+ next=find(json::array({converter,row("v1.2.3"),row("v1.2.2")}));expect(next&&next->tag=="v1.2.3","mixed unordered releases select newest loader");
  expect(!find(json::array({row("v2.0.0-beta.1",true)})),"stable install does not advertise prereleases");
- for(const auto field:{"draft","prerelease","published_at","html_url","tag_name","assets"}){auto bad=row("v1.1.1");bad.erase(field);expect(!find(json::array({bad})),"incomplete release ignored");}
- auto bad=row("v1.1.1");bad["draft"]=true;expect(!find(json::array({bad})),"draft ignored");
- bad=row("v1.1.1");bad["html_url"]="https://example.invalid/";expect(!find(json::array({bad})),"untrusted page ignored");
- for(const auto name:{"MW-Event-Loader-v1.1.1-source.zip","MW-Event-Loader-v1.1.1.zip.exe"}){bad=row("v1.1.1");bad["assets"][0]["name"]=name;expect(!find(json::array({bad})),"non-runtime asset ignored");}
- bad=row("v1.1.1");bad["assets"][0]["state"]="new";expect(!find(json::array({bad})),"unfinished upload ignored");
- bad=row("v1.1.1");bad["assets"][0]["size"]=0;expect(!find(json::array({bad})),"empty asset ignored");
+ for(const auto field:{"draft","prerelease","published_at","html_url","tag_name","assets"}){auto bad=row("v1.2.2");bad.erase(field);expect(!find(json::array({bad})),"incomplete release ignored");}
+ auto bad=row("v1.2.2");bad["draft"]=true;expect(!find(json::array({bad})),"draft ignored");
+ bad=row("v1.2.2");bad["html_url"]="https://example.invalid/";expect(!find(json::array({bad})),"untrusted page ignored");
+ for(const auto name:{"MW-Event-Loader-v1.2.2-source.zip","MW-Event-Loader-v1.2.2.zip.exe"}){bad=row("v1.2.2");bad["assets"][0]["name"]=name;expect(!find(json::array({bad})),"non-runtime asset ignored");}
+ bad=row("v1.2.2");bad["assets"][0]["state"]="new";expect(!find(json::array({bad})),"unfinished upload ignored");
+ bad=row("v1.2.2");bad["assets"][0]["size"]=0;expect(!find(json::array({bad})),"empty asset ignored");
  for(const auto version:{"v01.0.0","1.0","1.0.0-beta.01","1.0.0+dev","v1.1.0.exe"})expect(!ParseVersion(version),"malformed version rejected");
  expect(!FindUpdate("[{\"draft\":true,\"draft\":false}]","1.0.0",repo,prefix),"duplicate metadata keys rejected");
  expect(!FindUpdate("<html>error</html>","1.0.0",repo,prefix),"HTTP error document rejected");

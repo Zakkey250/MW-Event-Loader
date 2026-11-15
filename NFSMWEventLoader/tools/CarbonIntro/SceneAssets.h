@@ -13,6 +13,9 @@ struct SceneAssets {
   for(unsigned i=1;i<8;++i){const auto d=D3DXVECTOR3(cars[0][i]._41-cars[0][i-1]._41,cars[0][i]._42-cars[0][i-1]._42,cars[0][i]._43-cars[0][i-1]._43);const auto speed=D3DXVec3Length(&d)*15;if(!std::isfinite(speed)||speed>.2f)return false;}
   return true;
  }
+ // Standard cinematics hand off to the stationary native countdown. Only
+ // scenes that drive through that countdown need the standing-launch check.
+ bool SupportsDriftStart()const{return !rollingStart||StartsStopped();}
  std::vector<float> cameraRoadStations;
  std::vector<unsigned> cameraRoadReferences;
  std::vector<float> cameraLookRoadStations;

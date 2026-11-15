@@ -645,6 +645,10 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_ReadyV1(){return runtimeR
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_InheritedPreviewV1(){return 1;}
 #pragma comment(linker,"/EXPORT:MWEL_DriftRaceV1=_MWEL_DriftRaceV1")
 extern "C" __declspec(dllexport) unsigned __cdecl MWEL_DriftRaceV1(unsigned version){return version==1?1u:0u;}
+#pragma comment(linker,"/EXPORT:MWEL_DriftStationaryIntroV1=_MWEL_DriftStationaryIntroV1")
+extern "C" __declspec(dllexport) unsigned __cdecl MWEL_DriftStationaryIntroV1(){return 1u;}
+#pragma comment(linker,"/EXPORT:MWEL_EventSafehouseReturnV1=_MWEL_EventSafehouseReturnV1")
+extern "C" __declspec(dllexport) unsigned __cdecl MWEL_EventSafehouseReturnV1(){return 1u;}
 bool MWELRpdOfficerIgnoresGuards(unsigned worldId){return RpdOfficerIgnoresGuards(worldId);}
 #pragma comment(linker,"/EXPORT:MWEL_FrameV1=_MWEL_FrameV1")
 extern "C" __declspec(dllexport) void __cdecl MWEL_FrameV1(){

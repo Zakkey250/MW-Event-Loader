@@ -94,7 +94,7 @@ bool SelectVariant(unsigned participants,bool advance=false){
  auto matches=[&](const SceneRuntime& candidate){
 #ifdef MWEL_CARBON_RUNTIME
   if(candidate.assets.rollingStart&&!MWELCarbonRollingStartAllowed())return false;
-  if(MWELCarbonLaunchOnly()&&!candidate.assets.StartsStopped())return false;
+  if(MWELCarbonLaunchOnly()&&!candidate.assets.SupportsDriftStart())return false;
 #endif
   return candidate.enabled&&mwel_carbon::Matches(selection,candidate.variantName,participants,candidate.assets.participants);};
  if((!advance||strcmp(selection,"auto")!=0)&&matches(scene))return true;
@@ -520,4 +520,3 @@ DWORD WINAPI Init(void*){
 #ifndef MWEL_CARBON_RUNTIME
 BOOL WINAPI DllMain(HMODULE h,DWORD reason,void*){if(reason==DLL_PROCESS_ATTACH){module=h;DisableThreadLibraryCalls(h);auto thread=CreateThread(nullptr,0,Init,nullptr,0,nullptr);if(thread)CloseHandle(thread);}return TRUE;}
 #endif
-

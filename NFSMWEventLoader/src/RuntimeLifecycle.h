@@ -11,6 +11,10 @@ bool wasRunning=false;
 bool tougeReturnPending=false;
 bool tougeExitAwaiting=false;
 bool tougeReturnInFlight=false;
+bool ReturnAfterEvent(){
+ const auto package=event_race_policies::Current();
+ return package&&(mwel::Feature(package->authoring,"returnToSafehouse")||touge_grid::Active(*package)||mwel_rpd::CaseFile(package->authoring));
+}
 BYTE* rpdIntroFailureRace=nullptr;
 ULONGLONG rpdIntroFailureAt=0;
 const char* rpdIntroFailureReason=nullptr;
@@ -160,7 +164,7 @@ void FrameUnsafe(){
    return;
   }
  }
- if(tougeReturnPending&&Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6){
+ if((tougeReturnPending||tougeExitAwaiting)&&Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6){
   auto status=Read<BYTE*>(reinterpret_cast<void*>(0x91E000));
   if(status&&Read<unsigned>(status,0x1960)==0){
    // Verified native Game_JumpToSafehouse queues the standard game command.
@@ -253,7 +257,7 @@ void __cdecl Finish(void* argument){
 }
 void __fastcall End(void* race,void*){bool before=ending;ending=true;checkpoint_display::Reset();MWELCombatRaceExit(true);originalEnd(race);ending=before;}
 unsigned StopUnsafe(bool resultPending){
- if(const auto p=event_race_policies::Current();p&&(touge_grid::Active(*p)||mwel_rpd::CaseFile(p->authoring)))tougeExitAwaiting=true;
+ if(ReturnAfterEvent())tougeExitAwaiting=true;
  // Cover a definition already detached before the return request. The
  // detachment hook handles subsequent native resource callbacks as well.
  RetireDetachedTougeSpeech();
@@ -285,7 +289,7 @@ void __cdecl Stop(){
  __try{if(!resultPending)ReleaseCharactersUnsafe(key);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_character_release_fault=%08X",unsigned(GetExceptionCode()));}
 }
 unsigned RoamingUnsafe(){
- if(const auto p=event_race_policies::Current();p&&(touge_grid::Active(*p)||mwel_rpd::CaseFile(p->authoring)))tougeReturnPending=true;
+ if(ReturnAfterEvent())tougeReturnPending=true;
  checkpoint_display::Reset();MWELCombatRaceExit();
  PlayerResourceBoundary("before_owned_roaming");
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=roaming objects=%u",removed);
@@ -317,9 +321,8 @@ void WorldUnloadUnsafe(void* self){
 }
 void __fastcall WorldUnload(void* self,void*){__try{WorldUnloadUnsafe(self);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_world_unload_teardown_fault=%08X native_world_unload_retained=1",unsigned(GetExceptionCode()));}originalWorldUnload(self);if(tougeExitAwaiting)QueueTougeSafehouse();}
 void ExitWorldUnsafe(){
- // Native result ExitWorld also takes this path before WorldUnload. Retain
- // the owned Touge return request through that normal event exit.
- if(const auto p=event_race_policies::Current();p&&(touge_grid::Active(*p)||mwel_rpd::CaseFile(p->authoring)))tougeExitAwaiting=true;
+ // Retain the event's safehouse return through the native result ExitWorld.
+ if(ReturnAfterEvent())tougeExitAwaiting=true;
  RetireDetachedTougeSpeech();
  checkpoint_display::Reset();MWELCombatRaceExit();
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=exit_world objects=%u",removed);

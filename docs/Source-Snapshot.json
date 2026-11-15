@@ -15,9 +15,9 @@
     {
       "path": "NFSMWEventLoader/NFSMWEventLoader.ini",
       "bytes": 6974,
-      "sourceSha256": "f823f8993d1b023af8f1de96e19b7abb3cda1e2fb8803e77e03dff7ceafdc1b4",
-      "publishedSha256": "0dc07fa5f15fb23cd50767b2cde8f1fd93d8b5186d9cf616941519685af3f407",
-      "adaptation": "Normalized trailing blank lines; code unchanged."
+      "sourceSha256": "0dbad83d7891823ab4d840e47cbbe18d599ae4038b7ba7dd2b52d879bcfbded4",
+      "publishedSha256": "1852aff3c216b6cf87b0c1ecf6cd4b7249d51257b93ca76ebf15d50ed8cec310",
+      "adaptation": "Git text line endings."
     },
     {
       "path": "NFSMWEventLoader/src/ArmsSurvival.h",
@@ -413,9 +413,9 @@
     },
     {
       "path": "NFSMWEventLoader/src/EventCore.h",
-      "bytes": 26885,
-      "sourceSha256": "d927f85711760e75f188d848b91acf985676ce099d79c182b6c4d4d0662b33f9",
-      "publishedSha256": "d927f85711760e75f188d848b91acf985676ce099d79c182b6c4d4d0662b33f9",
+      "bytes": 27078,
+      "sourceSha256": "a42da25243af48a4f062bd78312a8362af7f49b0bb02ff4700ba5c25fd0cd29e",
+      "publishedSha256": "a42da25243af48a4f062bd78312a8362af7f49b0bb02ff4700ba5c25fd0cd29e",
       "adaptation": null
     },
     {
@@ -2002,16 +2002,16 @@
     },
     {
       "path": "NFSMWEventLoader/src/Runtime.cpp",
-      "bytes": 97907,
-      "sourceSha256": "2e5fde24421f5a8afbc5d4b0027196e6e598457d6005cad5ddd6e21a6e7aefb0",
-      "publishedSha256": "ef0bc6db2635df8ddb188f4bf4ebbbaf2f81614067239eea747d7dc7da0e3a60",
+      "bytes": 98277,
+      "sourceSha256": "772af39241d9740dfa045f69e1fda66ab009b2f38c3a1faadb77df34d026c111",
+      "publishedSha256": "77d84fb55e99db843ae2fce4dc18559bcd9eb31299ad380b24820892b388da21",
       "adaptation": "Git text line endings."
     },
     {
       "path": "NFSMWEventLoader/src/RuntimeLifecycle.h",
-      "bytes": 28584,
-      "sourceSha256": "fe021807498b8f548844edf83939425363aa8af6f0ef782dffb5790098a6b6e7",
-      "publishedSha256": "fe021807498b8f548844edf83939425363aa8af6f0ef782dffb5790098a6b6e7",
+      "bytes": 28501,
+      "sourceSha256": "421d8c74fb5a68ddbe69cb262c202dcef4e526c322a1fa091a9759b9a211cd0f",
+      "publishedSha256": "421d8c74fb5a68ddbe69cb262c202dcef4e526c322a1fa091a9759b9a211cd0f",
       "adaptation": null
     },
     {
@@ -2079,9 +2079,9 @@
     },
     {
       "path": "NFSMWEventLoader/src/SceneRoadFramesTests.cpp",
-      "bytes": 8537,
-      "sourceSha256": "40ee81d8f74e1b2f0ee3db59375387b4e3c76e7e4ce0c9a2c93ea489eaf64b1c",
-      "publishedSha256": "40ee81d8f74e1b2f0ee3db59375387b4e3c76e7e4ce0c9a2c93ea489eaf64b1c",
+      "bytes": 8944,
+      "sourceSha256": "3023282c347cddf7a1e476a364c94944f899fa7692aa0bb3dd10869551381de9",
+      "publishedSha256": "3023282c347cddf7a1e476a364c94944f899fa7692aa0bb3dd10869551381de9",
       "adaptation": null
     },
     {
@@ -2171,8 +2171,8 @@
     {
       "path": "NFSMWEventLoader/src/UpdateNotice.h",
       "bytes": 258,
-      "sourceSha256": "e3d46a8b2a650a373c9a550d0d7e8762d5d14ad63676af0666029cf30a9017cc",
-      "publishedSha256": "e3d46a8b2a650a373c9a550d0d7e8762d5d14ad63676af0666029cf30a9017cc",
+      "sourceSha256": "4b159343894abb14f2dd67bb7f21aa373499310bbd7f6fcdf2ee064116b227e2",
+      "publishedSha256": "4b159343894abb14f2dd67bb7f21aa373499310bbd7f6fcdf2ee064116b227e2",
       "adaptation": null
     },
     {
@@ -2247,16 +2247,16 @@
     },
     {
       "path": "NFSMWEventLoader/tests/update_notice.cpp",
-      "bytes": 6205,
-      "sourceSha256": "16486b84dd83e5117c0ec0c5275ed132db62ef89a398d0568db72e773c84be0b",
-      "publishedSha256": "16486b84dd83e5117c0ec0c5275ed132db62ef89a398d0568db72e773c84be0b",
+      "bytes": 6242,
+      "sourceSha256": "5973d8a37db1907f04f19e6559364be9befd694539aa913d8165419bb345dc2e",
+      "publishedSha256": "5973d8a37db1907f04f19e6559364be9befd694539aa913d8165419bb345dc2e",
       "adaptation": null
     },
     {
       "path": "NFSMWEventLoader/tools/CarbonIntro/Probe.cpp",
-      "bytes": 35945,
-      "sourceSha256": "c97e6df4d2a7b3f3e33921875ce9cad05b9e1786511b36c4e148da2cf8c40773",
-      "publishedSha256": "63aeac06a87816deca7742715133e92e0fb2172a8d17488c36f7d30c1aa145cf",
+      "bytes": 35949,
+      "sourceSha256": "382dcd146d2ba6a239432b9c8e3dbec88d52c0aaab33b407aaaefc30298113da",
+      "publishedSha256": "3bd7b6d6873462d79055bb27f07d6e23744db6bf90790fef4f8cec0c19cd7079",
       "adaptation": "Git text line endings."
     },
     {
@@ -2282,9 +2282,9 @@
     },
     {
       "path": "NFSMWEventLoader/tools/CarbonIntro/SceneAssets.h",
-      "bytes": 11386,
-      "sourceSha256": "e344afc08ccb2e274a6109ea43e0e742efe49154566310102823019cd231e604",
-      "publishedSha256": "8db6ce589dfc29790198a8b3cd176da6011f6f5d13d1dadf86acc5b30691cacd",
+      "bytes": 11609,
+      "sourceSha256": "8aebfe6c3653b6dc2af23b82e60dfbbb053cebd071b968ac1699714ce187808d",
+      "publishedSha256": "69e80262edfc88717b9509b6990d636677f133c035c4cdf58f9598a248cf6d0a",
       "adaptation": "Git text line endings."
     },
     {
@@ -2608,5 +2608,5 @@
     "EventLoader": false,
     "reason": "Full Event Loader compilation requires external NFRR dependencies and unpublished World2MW headers."
   },
-  "version": "1.2.0"
+  "version": "1.2.1"
 }

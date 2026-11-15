@@ -43,6 +43,10 @@ int main(int argc,char** argv){fs::path folder;try{
  Check(!mwel_carbon::HprRacerAllowed("HPR_RACE_ROLLING_2","sprint","drift"),"drift rejects running start");
  Check(mwel_carbon::HprRacerAllowed("HPR_GAUNTLET_CANNONBALL","tollboothrace","gauntlet")&&!mwel_carbon::HprRacerAllowed("HPR_GAUNTLET_CANNONBALL","sprint","armsrace"),"Gauntlet uses a one-player source scene only in its correct mode");
  {SceneAssets a;D3DXMATRIX m;D3DXMatrixIdentity(&m);a.cars[0].assign(8,m);Check(a.StartsStopped(),"standing launch measured from actual initial poses");a.cars[0][7]._41=.1f;Check(!a.StartsStopped(),"rolling movement cannot be declared a launch by its name");a.cars[0][7]._41=NAN;Check(!a.StartsStopped(),"invalid launch motion rejected");}
+ {SceneAssets a;D3DXMATRIX m;D3DXMatrixIdentity(&m);a.cars[0].assign(8,m);a.cars[0][7]._41=.1f;
+  Check(a.SupportsDriftStart(),"cinematic motion can precede a stationary native countdown");
+  a.rollingStart=true;Check(!a.SupportsDriftStart(),"a rolling start already moving is blocked in Drift");
+  a.cars[0][7]=m;Check(a.SupportsDriftStart(),"a rolling scene with a standing launch is allowed in Drift");}
  TravelTests();
  if(argc==3&&std::string(argv[1])=="--scene"){SceneAssets a;a.Load(argv[2]);std::printf("SCENE_ASSETS_PASS participants=%u duration=%.3f camera_frames=%zu independent_road_frames=%zu\n",a.participants,a.duration,a.cameras.size(),a.cameraLookRoadStations.size());return 0;}
  Check(argc==2,"supply temporary HPR_ fixture folder");folder=fs::absolute(argv[1]);Check(folder.filename()=="HPR_ROAD_FRAME_TEST","bounded test folder required");Check(!fs::exists(folder),"preserve existing data");

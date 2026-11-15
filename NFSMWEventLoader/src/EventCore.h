@@ -172,6 +172,8 @@ inline EventPackage ParsePackage(const fs::path& directory){
  Number(authored,"traffic",0,100);Number(authored,"copDensity",0,100);
  if(authored.contains("startHeatLevel")&&!authored.at("startHeatLevel").is_null())Integer(authored,"startHeatLevel",0,10);
  if(authored.contains("checkpointsVisible")&&!authored.at("checkpointsVisible").is_boolean())throw std::runtime_error("Checkpoint display setting");
+ for(const auto* flag:{"outsideWorldMap","returnToSafehouse"})
+  if(authored.contains(flag)&&!authored.at(flag).is_boolean())throw std::runtime_error("Invalid event map or safehouse setting");
  if(!authored.at("cops").is_boolean())throw std::runtime_error("Police setting");
  if(mode=="tollboothrace")Number(authored,"timeLimit",.001,86400);
  if((mode=="circuit"||mode=="lapknockout")&&authored.at("loop")!=true)throw std::runtime_error("Loop required");
