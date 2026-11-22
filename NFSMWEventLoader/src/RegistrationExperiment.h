@@ -4,6 +4,7 @@
 #include "OpponentRosterPolicy.h"
 #include "CarbonParticleFX.h"
 namespace registration_experiment {
+#include "OwnedSpeedTrapIcons.h"
 struct Node { unsigned key,value,flags; };
 struct Collection {
  Node* nodes;unsigned capacity,count;unsigned short worstCollision,keyShift;
@@ -21,9 +22,11 @@ struct Clone {
  unsigned ownerKey=0;
  bool race=true;
  bool correction=false;
+ bool convertedFromDrag=false;
  bool bin=false;
  bool placement=false;
  std::vector<unsigned> opponentKeys;
+ std::vector<unsigned> geometryKeys,speedTrapKeys;
  bool character=false;
  bool gridValidated=false;
  bool gauntlet=false,hotPursuit=false;
@@ -56,14 +59,16 @@ void*(__thiscall* originalAttribute)(void*,unsigned,unsigned);
 thread_local bool activatingOwned=false,initializingOwnedGrid=false;
 thread_local Clone* initializingGridOwner=nullptr;
 thread_local Clone* activatingOwner=nullptr;
+thread_local void* linkedActivity=nullptr;
 bool(__thiscall* originalScopeContains)(void*,void*);
-bool(__thiscall* originalScopeCommand)(void*,unsigned,void*);
+bool(__thiscall* originalScopeCommand)(void*,void*,void*);
 void(__thiscall* originalSetParent)(Collection*,unsigned);
 unsigned(__cdecl* originalNumReferences)(unsigned);
-// Bounded lab objects live until process teardown. A release loader must add
-// vault unload/retry ownership before this mechanism can be enabled normally.
+// Owned native objects are registered only for the selected activity.
 std::map<unsigned,void*> geometryObjects;
+unsigned mountedOwner=0;
 Clone* Find(unsigned key);
+unsigned Hash(const char* text);
 bool PrepareExtendedGrid(Clone& clone);
 void* __cdecl EventLookup(unsigned key){
  auto result=originalEventLookup(key);
@@ -108,44 +113,88 @@ void* __fastcall ParameterEvent(void* self,void*){
  return result;
 }
 bool GameplayClass(void* self);
-void* GeometryObject(unsigned key,bool marker){
+struct GeometryTable {
+ BYTE* manager=*reinterpret_cast<BYTE**>(0x91E00C);
+ unsigned capacity=0,table=0,mask=0,shift=0,worst=0;
+ bool Ready(){
+  return manager&&Copy(manager+0x6C,&capacity,4)&&Copy(manager+0x78,&table,4)&&table&&
+   Copy(manager+0x70,&mask,4)&&Copy(manager+0x60,&shift,4)&&Copy(manager+0x74,&worst,4)&&
+   capacity>=2&&capacity<=65536&&(capacity&(capacity-1))==0&&mask==capacity-1&&worst<capacity;
+ }
+ void* Lookup(unsigned key) const {
+  return reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(0x5DD930)(manager,key);
+ }
+ bool HasSpace(unsigned key) const {
+  auto slot=key>>(shift&31);
+  for(unsigned i=0;i<capacity;++i,++slot){
+   unsigned object=0;if(!Copy(reinterpret_cast<void*>(table+(slot&mask)*8+4),&object,4))return false;
+   if(!object)return true;
+  }
+  return false;
+ }
+};
+bool GeometryIdentity(void* object,unsigned key){
+ Collection* collection=nullptr;unsigned actual=0;
+ return Copy(static_cast<BYTE*>(object)+8,&collection,4)&&collection&&Copy(&collection->key,&actual,4)&&actual==key;
+}
+Collection* CurrentRaceCollection(const BYTE* race){
+ BYTE* parameters=nullptr;BYTE* record=nullptr;Collection* collection=nullptr;
+ if(!race||!Copy(race+0x1968,&parameters,4)||!parameters||!Copy(parameters+8,&record,4)||!record||!Copy(record+4,&collection,4))return nullptr;
+ return collection;
+}
+BYTE* LiveGeometry(const GeometryTable& table,unsigned key){
+ auto it=geometryObjects.find(key);
+ if(it==geometryObjects.end()||table.Lookup(key)!=it->second||!GeometryIdentity(it->second,key))return nullptr;
+ return static_cast<BYTE*>(it->second);
+}
+bool DestroyGeometry(const Clone& clone,void* object){
+ const bool marker=clone.templateKey==0xAAF8BB9C;
+ const unsigned expected=clone.character?0x8A39EC:marker?0x8A39B0:0x8A3A84,destructor=clone.character?0x5E9C70:marker?0x5E87C0:0x5F1750;
+ unsigned vtable=0;
+ if(!Copy(object,&vtable,4)||vtable!=expected||*reinterpret_cast<unsigned*>(vtable)!=destructor)return false;
+ Log("EVENT_RUNTIME_GEOMETRY_RELEASE key=%08X owner=%08X object=%08X native_destructor=%08X",clone.collection.key,clone.ownerKey,unsigned(object),destructor);
+ reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(destructor)(object,1);
+ return true;
+}
+void* GeometryObject(unsigned key,bool marker,bool* constructed=nullptr){
  auto clone=Find(key);if(!authoredGeometry||!clone||clone->race||clone->bin||clone->placement)return nullptr;
  bool isMarker=clone->templateKey==0xAAF8BB9C;
  if(isMarker!=marker)return nullptr;
- auto manager=*reinterpret_cast<BYTE**>(0x91E00C);
- unsigned capacity=0,table=0;
- // This table holds live native geometry, not every authored collection in
- // every installed package. Race/opponent/attribute clones consume no slot
- // until their geometry is constructed. Check the actual table and its
- // occupancy below; the installed library size must not block an event.
- if(!manager||!Copy(manager+0x6C,&capacity,4)||!Copy(manager+0x78,&table,4)||!table||capacity<2||capacity>65536){Log("EXPERIMENT_REFUSED geometry_manager_capacity capacity=%u authored_collections=%u",capacity,unsigned(clones.size()));return nullptr;}
+ GeometryTable table;if(!table.Ready()){Log("EXPERIMENT_REFUSED geometry_manager_capacity capacity=%u",table.capacity);return nullptr;}
  if(auto it=geometryObjects.find(key);it!=geometryObjects.end()){
-  bool registered=false;for(unsigned i=0;i<capacity;++i){unsigned object=0;if(!Copy(reinterpret_cast<void*>(table+i*8+4),&object,4))return nullptr;registered|=object==unsigned(it->second);}
-  Collection* owner=nullptr;unsigned actualKey=0;
-  if(registered&&Copy(static_cast<BYTE*>(it->second)+8,&owner,4)&&owner&&Copy(static_cast<BYTE*>(static_cast<void*>(owner))+0x20,&actualKey,4)&&actualKey==key)return it->second;
+  if(table.Lookup(key)==it->second){if(GeometryIdentity(it->second,key))return it->second;return nullptr;}
   Log("EVENT_GEOMETRY_STALE_INSTANCE_RETIRED key=%08X object=%08X native_owner_released=1",key,unsigned(it->second));geometryObjects.erase(it);
  }
- unsigned occupied=0;for(unsigned i=0;i<capacity;++i){unsigned object=0;if(!Copy(reinterpret_cast<void*>(table+i*8+4),&object,4))return nullptr;occupied+=object!=0;}
- if(occupied+1>=capacity){Log("EXPERIMENT_REFUSED geometry_manager_full");return nullptr;}
+ auto existing=table.Lookup(key);
+ if(existing){
+  // Native vault loading may already have built the relocated story marker
+  // from our collection. Its vault owns destruction. Inserting a second
+  // object with the same key would make either destructor erase the first.
+  Collection* collection=nullptr;
+  if(clone->correction&&Copy(static_cast<BYTE*>(existing)+8,&collection,4)&&collection==&clone->collection)return existing;
+  Log("EXPERIMENT_REFUSED geometry_manager_key_conflict key=%08X",key);return nullptr;
+ }
+ if(!table.HasSpace(key)){Log("EXPERIMENT_REFUSED geometry_manager_full");return nullptr;}
+ auto references=reinterpret_cast<unsigned(__cdecl*)(unsigned)>(0x5E5330)(key);
+ if(references>65536)return nullptr;
  unsigned ctor=clone->character?0x5EF450:marker?0x5E8600:0x601790,size=clone->character?0x80:marker?0x40:0xCC;
  auto storage=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x5D29D0)(reinterpret_cast<void*>(0x925B30),size,0);
  if(!storage){Log("EXPERIMENT_REFUSED geometry_allocation");return nullptr;}
- auto object=reinterpret_cast<void*(__thiscall*)(void*,unsigned*)>(ctor)(storage,&key);
+ auto object=owned_speedtrap_icons::Construct(storage,ctor,key,clone->templateKey==0xB05871D3);
  // Objects constructed outside a vault still need the reference storage
  // normally supplied by that vault. Match GRaceParameters::Init's native
  // allocation contract; the native deleting destructor owns its release.
- auto references=reinterpret_cast<unsigned(__cdecl*)(unsigned)>(0x5E5330)(key);
- if(references>65536)throw std::runtime_error("owned geometry reference capacity invalid");
  if(references){
   auto entries=reinterpret_cast<void*(__cdecl*)(unsigned)>(0x652AD0)(references*8);
-  if(!entries)throw std::runtime_error("owned geometry reference allocation failed");
+  if(!entries){DestroyGeometry(*clone,object);return nullptr;}
   *reinterpret_cast<void**>(static_cast<BYTE*>(object)+0x1C)=entries;
   *reinterpret_cast<unsigned short*>(static_cast<BYTE*>(object)+0x1A)=0;
   static_cast<BYTE*>(object)[0x18]|=4;
  }
  if(worldLogEnabled&&clone->correction&&!clone->race&&!clone->character&&!marker){float position[3]{};Copy(static_cast<BYTE*>(object)+0x58,position,12);Log("EVENT_NATIVE_SCRIPT_TRIGGER_POSE key=%08X world=%.4f,%.4f,%.4f identity_unchanged=1",key,position[0],position[1],position[2]);}
  geometryObjects.emplace(key,object);
- Log("EXPERIMENT_NATIVE_GEOMETRY_OBJECT key=%08X kind=%s object=%08X constructor=%08X manager_free=%u manager_capacity=%u authored_collections=%u",key,clone->character?"character":marker?"startgrid":"trigger",unsigned(object),ctor,capacity-occupied-1,capacity,unsigned(clones.size()));
+ if(constructed)*constructed=true;
+ Log("EXPERIMENT_NATIVE_GEOMETRY_OBJECT key=%08X kind=%s object=%08X constructor=%08X manager_capacity=%u authored_collections=%u",key,clone->character?"character":marker?"startgrid":"trigger",unsigned(object),ctor,table.capacity,unsigned(clones.size()));
  return object;
 }
 bool ReleaseGeometry(unsigned owner,bool characters=false){
@@ -153,29 +202,38 @@ bool ReleaseGeometry(unsigned owner,bool characters=false){
  // unregister CARP triggers, release icons/particles, clear the inside-body
  // vector and detach GManager connections. Keeping active objects across
  // unrelated race instances retains the old event's callbacks and references.
- auto manager=*reinterpret_cast<BYTE**>(0x91E00C);unsigned capacity=0,table=0;
- if(!manager||!Copy(manager+0x6C,&capacity,4)||!Copy(manager+0x78,&table,4)||!table||capacity>65536)return false;
- auto registered=[&](void* object){for(unsigned i=0;i<capacity;++i){unsigned value=0;if(!Copy(reinterpret_cast<void*>(table+i*8+4),&value,4))return true;if(value==unsigned(object))return true;}return false;};
+ if(!owner||geometryObjects.empty())return true;
+ GeometryTable table;
+ const bool ready=table.Ready();
+ if(!ready&&table.manager)return false;
  for(auto it=geometryObjects.begin();it!=geometryObjects.end();){auto clone=Find(it->first);if(!clone||clone->ownerKey!=owner||clone->character!=characters){++it;continue;}
-  auto object=static_cast<BYTE*>(it->second);auto key=it->first;
-  if(!registered(object)){it=geometryObjects.erase(it);continue;}
-  Collection* collection=nullptr;unsigned actual=0,vtable=0;
-  if(!Copy(object+8,&collection,4)||!collection||!Copy(&collection->key,&actual,4)||actual!=key||!Copy(object,&vtable,4))return false;
-  bool marker=clone->templateKey==0xAAF8BB9C;unsigned expected=clone->character?0x8A39EC:marker?0x8A39B0:0x8A3A84,destructor=clone->character?0x5E9C70:marker?0x5E87C0:0x5F1750;
-  if(vtable!=expected||*reinterpret_cast<unsigned*>(vtable)!=destructor)return false;
-  Log("EVENT_RUNTIME_GEOMETRY_RELEASE key=%08X owner=%08X object=%08X native_destructor=%08X",key,owner,unsigned(object),destructor);
-  reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(destructor)(object,1);
-  if(registered(object))return false;it=geometryObjects.erase(it);
+  auto object=it->second;auto key=it->first;
+  if(ready&&table.Lookup(key)==object){
+   if(!GeometryIdentity(object,key)||!DestroyGeometry(*clone,object))return false;
+   if(table.Lookup(key)==object)return false;
+  }
+  it=geometryObjects.erase(it);
  }
+ if(!characters&&mountedOwner==owner)mountedOwner=0;
  Log("EVENT_RUNTIME_GEOMETRY_RELEASED owner=%08X native_lifecycle=1",owner);return true;
 }
 bool PrepareCharacters(Clone& owner){
- bool created=false;for(auto key:owner.opponentKeys){auto child=Find(key);if(!child||!child->character)continue;auto object=GeometryObject(key,false);auto native=reinterpret_cast<void*(__cdecl*)(unsigned)>(0x5E1880)(key);Log("EVENT_NATIVE_EXTRA_CHARACTER owner=%08X key=%08X object=%08X native_find=%08X original_attributes_modified=0",owner.collection.key,key,unsigned(object),unsigned(native));if(!object||native!=object)return false;created=true;}
+ bool created=false;for(auto key:owner.opponentKeys){auto child=Find(key);if(!child||!child->character)continue;auto object=GeometryObject(key,false,&created);auto native=reinterpret_cast<void*(__cdecl*)(unsigned)>(0x5E1880)(key);Log("EVENT_NATIVE_EXTRA_CHARACTER owner=%08X key=%08X object=%08X native_find=%08X original_attributes_modified=0",owner.collection.key,key,unsigned(object),unsigned(native));if(!object||native!=object)return false;}
  if(created){auto manager=*reinterpret_cast<void**>(0x91E00C);if(!manager)return false;reinterpret_cast<void(__thiscall*)(void*)>(0x5F18A0)(manager);}
  return true;
 }
 bool ReleaseCharacters(unsigned owner){
  return ReleaseGeometry(owner,true);
+}
+bool MountGeometry(const Clone& owner,bool& created){
+ mountedOwner=owner.collection.key;
+ for(auto key:owner.geometryKeys){
+  auto child=Find(key);
+  if(!child||!GeometryObject(key,child->templateKey==0xAAF8BB9C,&created)){
+   Log("EXPERIMENT_RACE_ABORT owned_geometry_unavailable owner=%08X child=%08X",owner.collection.key,key);return false;
+  }
+ }
+ return true;
 }
 Clone* ActivityOwner(void* activity){
  Collection* collection=nullptr;Collection* visited[16]{};
@@ -195,13 +253,12 @@ void __fastcall ActivityActivate(void* self,void*){
  // Do not recreate the activity or modify stock/story command programs.
  auto owner=authoredGeometry?ActivityOwner(self):nullptr;
  if(owner){
-  for(const auto& child:clones)if(child->ownerKey==owner->collection.key&&!child->placement&&!GeometryObject(child->collection.key,child->templateKey==0xAAF8BB9C)){
-   Log("EXPERIMENT_RACE_ABORT owned_activity_geometry_unavailable owner=%08X child=%08X",owner->collection.key,child->collection.key);return;
-  }
+  bool created=false;if(!MountGeometry(*owner,created))return;
   auto manager=*reinterpret_cast<void**>(0x91E00C);
   if(!manager){Log("EXPERIMENT_RACE_ABORT owned_activity_reference_manager_missing owner=%08X",owner->collection.key);return;}
-  reinterpret_cast<void(__thiscall*)(void*)>(0x5F18A0)(manager);
-  Log("EVENT_NATIVE_ACTIVITY_GEOMETRY_BOUND owner=%08X activity=%08X native_link_pass=1 before_commands=1",owner->collection.key,unsigned(self));
+  const bool link=created||linkedActivity!=self;
+  if(link)reinterpret_cast<void(__thiscall*)(void*)>(0x5F18A0)(manager);
+  Log("EVENT_NATIVE_ACTIVITY_GEOMETRY_BOUND owner=%08X activity=%08X native_link_pass=%u before_commands=1",owner->collection.key,unsigned(self),unsigned(link));
  }
  originalActivityActivate(self);
 }
@@ -249,9 +306,7 @@ void __fastcall ActivateEvent(void* self,void*,unsigned eventId){
  // An already-loaded world does not run FindVault again. Construct every
  // owned trigger before native Init builds its checkpoint/callback arrays;
  // mounting only the start marker later leaves those arrays full of nulls.
- if(authoredGeometry)for(const auto& child:clones)if(child->ownerKey==owner->collection.key&&!child->placement&&!GeometryObject(child->collection.key,child->templateKey==0xAAF8BB9C)){
-  Log("EXPERIMENT_RACE_ABORT owned_activation_geometry_unavailable owner=%08X child=%08X",owner->collection.key,child->collection.key);return;
- }
+ bool created=false;if(authoredGeometry&&!MountGeometry(*owner,created))return;
  Log("EVENT_NATIVE_ACTIVATION_GEOMETRY_READY owner=%08X correction=%u before_native_init=1 world_reload=0",owner->collection.key,unsigned(owner->correction));
  auto parameters=reinterpret_cast<void*(__thiscall*)(void*,void*)>(0x603440)(database,selected);
  if(!parameters){Log("EXPERIMENT_RACE_ABORT owned_native_parameters_allocation event=%08X",eventId);return;}
@@ -269,7 +324,10 @@ void __fastcall ActivateEvent(void* self,void*,unsigned eventId){
  unsigned short references=0;Copy(static_cast<BYTE*>(activity)+0x1A,&references,2);
  Log("EVENT_NATIVE_ACTIVITY_REFERENCES_BOUND owner=%08X activity=%08X references=%u native_link_pass=1",owner->collection.key,unsigned(activity),unsigned(references));
  Log("EVENT_NATIVE_DERIVED_START owner=%08X event=%08X parameters=%08X activity=%08X world_reload=0 native_lifetime=1",owner->collection.key,eventId,unsigned(parameters),unsigned(activity));
- bool previous=activatingOwned;auto previousOwner=activatingOwner;activatingOwner=owner;activatingOwned=true;originalActivateEvent(self,eventId);activatingOwned=previous;activatingOwner=previousOwner;
+ bool previous=activatingOwned;auto previousOwner=activatingOwner;auto previousActivity=linkedActivity;
+ activatingOwner=owner;activatingOwned=true;linkedActivity=activity;
+ originalActivateEvent(self,eventId);
+ linkedActivity=previousActivity;activatingOwned=previous;activatingOwner=previousOwner;
 }
 bool WarpOwnedPlayer(unsigned owner,void* start){
  // IVehicle::Warp uses the vehicle's lateral basis, whereas the authored
@@ -400,30 +458,60 @@ bool __fastcall ScopeContains(void* self,void*,void* candidate){
  for(unsigned depth=0;source&&depth<64;++depth){Collection value{};if(!Copy(source,&value,sizeof(value)))return false;if(value.key==linked)return true;source=value.parent;}
  return false;
 }
-bool __fastcall ScopeCommand(void* self,void*,unsigned eventKey,void* command){
- if(originalScopeCommand(self,eventKey,command))return true;
- auto instance=static_cast<BYTE*>(self)+4;
- auto key=reinterpret_cast<unsigned(__thiscall*)(void*)>(0x452430)(instance);
- auto clone=Find(key);
- if(!clone)clone=Find(reinterpret_cast<unsigned(__thiscall*)(void*)>(0x4546A0)(instance));
- if(!clone)return false;
- auto data=reinterpret_cast<unsigned*(__thiscall*)(void*,unsigned,unsigned)>(0x454810)(static_cast<BYTE*>(command)+4,0x918C796E,0);
- unsigned trigger=0;if(!data||!Copy(data,&trigger,4)||trigger!=eventKey)return false;
- data=reinterpret_cast<unsigned*(__thiscall*)(void*,unsigned,unsigned)>(0x454810)(static_cast<BYTE*>(command)+4,0x857FE432,0);
- unsigned scope=0;if(!data||!Copy(data,&scope,4))return false;
- auto source=getCollection(clone->collection.klass,clone->templateKey);
- for(unsigned depth=0;source&&depth<64;++depth){Collection value{};if(!Copy(source,&value,sizeof(value)))return false;if(value.key==scope){Log("EXPERIMENT_TEMPLATE_COMMAND_DEPENDENCY event=%08X scope=%08X",eventKey,scope);return true;}source=value.parent;}
+bool DragTrafficCommand(void* instance){
+ struct Blob {unsigned size;const BYTE* bytes;};
+ Blob code{};
+ if(!Copy(originalAttribute(instance,0x9A4A020A,0),&code,sizeof(code))||code.size<5||code.size>4096)return false;
+ BYTE bytes[4096];if(!Copy(code.bytes,bytes,code.size))return false;
+ BYTE decoded[4096];
+ std::string_view script(reinterpret_cast<const char*>(bytes),code.size);
+ if(script.compare(0,4,"JDLZ")==0){
+  unsigned size=0,limit=0;
+  if(code.size<18||bytes[4]!=2||bytes[5]!=16)return false;
+  memcpy(&size,bytes+8,4);memcpy(&limit,bytes+12,4);
+  if(!size||size>sizeof(decoded)||limit!=code.size)return false;
+  unsigned in=16,out=0,control=1,mode=1;
+  while(out<size){
+   if(control==1){if(in==limit)return false;control=bytes[in++]|256;}
+   if(mode==1){if(in==limit)return false;mode=bytes[in++]|256;}
+   if(control&1){
+    if(limit-in<2)return false;
+    unsigned a=bytes[in++],b=bytes[in++];
+    const unsigned distance=(mode&1)?(a&15)+1:((a>>5)<<8|b)+17;
+    unsigned count=(mode&1)?((a>>4)<<8|b)+3:(a&31)+3;
+    if(distance>out||count>size-out)return false;
+    while(count--){decoded[out]=decoded[out-distance];++out;}
+    mode>>=1;
+   }else{if(in==limit)return false;decoded[out++]=bytes[in++];}
+   control>>=1;
+  }
+  script={reinterpret_cast<const char*>(decoded),size};
+ }
+ return script.compare(0,4,"\x1b" "Lua")==0&&script.find(std::string_view("SpawnCharacter\0",15))!=script.npos&&
+  script.find(std::string_view("Sender\0",7))!=script.npos;
+}
+bool __fastcall ScopeCommand(void* self,void*,void* state,void* command){
+ const bool matches=originalScopeCommand(self,state,command);
+ if(!matches)return false;
+ const auto owner=ActivityOwner(self);
+ if(!owner||!owner->convertedFromDrag)return true;
+ auto instance=static_cast<BYTE*>(command)+4;
+ static const unsigned racing=Hash("stategraph_basicrace_racing"),drag=Hash("drag");
+ unsigned stateKey=0,scope=0;
+ if(!Copy(originalAttribute(instance,0x918C796E,0),&stateKey,4)||stateKey!=racing||
+    !Copy(originalAttribute(instance,0x857FE432,0),&scope,4)||(scope!=owner->templateKey&&scope!=drag)||
+    !DragTrafficCommand(instance))return true;
+ if(worldLogEnabled){
+  unsigned handler=0;Collection* attributes=nullptr;
+  if(Copy(static_cast<BYTE*>(command)+8,&attributes,4)&&attributes)Copy(&attributes->key,&handler,4);
+  Log("EVENT_DRAG_TRAFFIC_HANDLER_SKIPPED owner=%08X handler=%08X native_story_handlers_retained=1",owner->collection.key,handler);
+ }
  return false;
 }
 void* __fastcall FindVault(void* self,void*,unsigned key){
  if(auto clone=Find(key);clone&&clone->race){
-  // Database enumeration asks for vaults before the runtime-object manager
-  // exists. Keep that lookup read-only; mount objects when it is available.
-  BYTE* manager=nullptr;unsigned capacity=0,table=0;
-  bool managerReady=Copy(reinterpret_cast<void*>(0x91E00C),&manager,4)&&manager&&Copy(manager+0x6C,&capacity,4)&&Copy(manager+0x78,&table,4)&&table&&capacity>=2&&capacity<=65536;
-  if(authoredGeometry&&managerReady)for(const auto& child:clones)if(child->ownerKey==key&&!child->placement&&!GeometryObject(child->collection.key,child->templateKey==0xAAF8BB9C)){
-   Log("EXPERIMENT_RACE_ABORT owned_geometry_unavailable event=%08X child=%08X",key,child->collection.key);return nullptr;
-  }
+  // The native race database constructs parameter records for its entire
+  // catalog here. Only activation mounts authored triggers and icons.
   // Only the inherited-route experiment uses a native vault as a geometry
   // dependency. An authored event must eventually own its complete geometry.
   auto dependency=findVault(self,clone->templateKey);
@@ -517,22 +605,25 @@ void Strings(Clone& clone,Fields& fields,const char* name,const std::vector<std:
  for(unsigned i=0;i<values.size();++i){auto text=std::make_unique<std::string>(values[i]);auto pointer=unsigned(text->c_str());memcpy(bytes->data()+8+i*4,&pointer,4);clone.strings.push_back(std::move(text));}
  auto key=Hash(name);fields[key]={key,unsigned(bytes->data()),0x02000001};clone.arrays.push_back(std::move(bytes));
 }
-std::vector<unsigned> SourceReferences(Clone& clone,const char* field){
- auto source=getCollection(clone.collection.klass,clone.templateKey);auto key=Hash(field);Collection* visited[64]{};
+std::vector<unsigned> CollectionReferences(Collection* source,const char* field){
+ auto key=Hash(field);Collection* visited[64]{};
  for(unsigned depth=0;source&&depth<64;++depth){
-  for(unsigned previous=0;previous<depth;++previous)if(visited[previous]==source)throw std::runtime_error("native opponent inheritance cycle");visited[depth]=source;
-  Collection value{};if(!Copy(source,&value,sizeof(value))||value.capacity>4096)throw std::runtime_error("native opponent table unreadable");
+  for(unsigned previous=0;previous<depth;++previous)if(visited[previous]==source)throw std::runtime_error("native reference inheritance cycle");visited[depth]=source;
+  Collection value{};if(!Copy(source,&value,sizeof(value))||value.capacity>4096)throw std::runtime_error("native reference table unreadable");
   for(unsigned slot=0;slot<value.capacity;++slot){
-   Node node{};if(!Copy(value.nodes+slot,&node,sizeof(node)))throw std::runtime_error("native opponent field unreadable");
+   Node node{};if(!Copy(value.nodes+slot,&node,sizeof(node)))throw std::runtime_error("native reference field unreadable");
    if(node.key!=key)continue;
    unsigned short header[4]{};
-   if((node.flags&0xffff)!=0x30||!(node.flags&0x02000000)||!Copy(reinterpret_cast<void*>(node.value),header,sizeof(header))||header[1]>header[0]||header[0]>8192||header[2]!=4)throw std::runtime_error("native opponent reference layout unsupported");
+   if((node.flags&0xffff)!=0x30||!(node.flags&0x02000000)||!Copy(reinterpret_cast<void*>(node.value),header,sizeof(header))||header[1]>header[0]||header[0]>8192||header[2]!=4)throw std::runtime_error("native reference layout unsupported");
    unsigned offset=8+((header[3]&0x8000)?8:0);std::vector<unsigned> result(header[1]);
-   if(!result.empty()&&!Copy(reinterpret_cast<void*>(node.value+offset),result.data(),result.size()*4))throw std::runtime_error("native opponent references unreadable");return result;
+   if(!result.empty()&&!Copy(reinterpret_cast<void*>(node.value+offset),result.data(),result.size()*4))throw std::runtime_error("native references unreadable");return result;
   }
   source=value.parent;
  }
  return {};
+}
+std::vector<unsigned> SourceReferences(Clone& clone,const char* field){
+ return CollectionReferences(getCollection(clone.collection.klass,clone.templateKey),field);
 }
 std::vector<unsigned> SourceOpponents(Clone& clone){return SourceReferences(clone,"Opponents");}
 void PreserveNativeField(Clone& clone,Fields& fields,Collection* source,const char* name){
@@ -589,7 +680,7 @@ void PreserveNativeMarkers(Clone& raceClone,const mwel::EventPackage& package,vo
    auto fields=ReadFields(*child);Vector(*child,fields,"Position",marker.at("position"));Vector(*child,fields,"Dimensions",marker.at("dimensions"));
    float angle=marker.at("rotation").get<float>();unsigned bits=0;memcpy(&bits,&angle,4);Scalar(fields,"Rotation",bits,9);
    if(type=="planetrigger"){float width=marker.at("dimensions").at(1).get<float>();memcpy(&bits,&width,4);Scalar(fields,"Width",bits,9);}
-   Rebuild(*child,fields);clones.push_back(std::move(child));
+   Rebuild(*child,fields);raceClone.geometryKeys.push_back(match);clones.push_back(std::move(child));
   }
   if(std::find(children.begin(),children.end(),match)==children.end())children.push_back(match);
   Log("EVENT_NATIVE_STORY_MARKER_RETAINED owner=%08X key=%08X authored_transform=%u script_identity_preserved=1 legacy_complete=%u",raceClone.collection.key,match,unsigned(moved),unsigned(completeLegacy));
@@ -650,8 +741,17 @@ void RaceProperties(Clone& clone,Fields& fields,const mwel::EventPackage& packag
  clone.collection.parent=selected;
  const std::map<std::string,std::string> icons={{"sprint","p2p"},{"lapknockout","knockout"},{"speedtraprace","speedtrap"},{"tollboothrace","tollbooth"}};
  auto icon=icons.find(mode);Text(clone,fields,"EventIconType",icon==icons.end()?mode:icon->second);
- if(mode=="drag")Text(clone,fields,"TrafficPattern","drag");
- else Text(clone,fields,"TrafficPattern",package.authoring.value("trafficPattern",std::string()));
+ auto trafficPattern=package.authoring.value("trafficPattern",std::string());
+ if(mode=="drag")trafficPattern="drag";
+ else if(trafficPattern=="drag")trafficPattern.clear();
+ Text(clone,fields,"TrafficPattern",trafficPattern);
+ // Packaged corrections can carry both the old drag traffic pattern and
+ // the original drag-only spawn triggers into a different course and mode.
+ clone.convertedFromDrag=mode!="drag"&&clone.correction&&package.authoring.at("correctionTarget").value("mode",std::string())=="drag";
+ if(clone.convertedFromDrag){
+  References(clone,fields,"RandomSpawnTriggers",{});
+  Log("EVENT_DRAG_TRAFFIC_REMOVED owner=%08X mode=%s",clone.collection.key,mode.c_str());
+ }
  const unsigned racers=package.authoring.at("racerCount").get<unsigned>();auto source=SourceOpponents(clone);std::vector<unsigned> roster;
  const bool generic=!clone.gauntlet&&racers>1&&source.empty();
  if(generic){
@@ -761,6 +861,7 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
     clones.push_back(std::move(placement));
    }
   }
+  raceClone.geometryKeys.push_back(key);
   clones.push_back(std::move(child));
  }
  if(mwel::RpdStartOnly(package.authoring))Scalar(fields,"racefinish",0,0x30);
@@ -768,6 +869,7 @@ void AuthorGeometry(Clone& raceClone,const mwel::EventPackage& package,void* kla
  References(raceClone,fields,"Checkpoint",checkpoints);References(raceClone,fields,"Children",children);References(raceClone,fields,"Shortcuts",shortcuts);
  References(raceClone,fields,"SpeedTrapList",speedtraps);
  Log("EVENT_AUTHORED_SPEEDTRAP_LIST owner=%08X points=%u checkpoint_list_separate=1",raceClone.collection.key,unsigned(speedtraps.size()));
+ raceClone.speedTrapKeys=std::move(speedtraps);
  std::vector<std::string> barriers;
  for(const auto& barrier:package.authoring.value("barriers",mwel::Json::array()))if(!barrier.contains("position")||barrier.at("position").is_null())barriers.push_back((barrier.value("reverse",false)?"*":"")+barrier.at("name").get<std::string>());
  Strings(raceClone,fields,"Barriers",barriers);
@@ -967,6 +1069,7 @@ bool Install(){
   ,{0x5E5330,NumReferences,reinterpret_cast<void**>(&originalNumReferences),"\x6A\xFF\x68\xE0\x51\x87\x00",7}
   ,{0x5E3EC0,FindVault,reinterpret_cast<void**>(&findVault),"\x83\xEC\x10\x8B\x51\x20",6}
   ,{0x5E2D70,ScopeContains,reinterpret_cast<void**>(&originalScopeContains),"\x64\xA1\x00\x00\x00\x00",6}
+  ,{0x5E2E70,ScopeCommand,reinterpret_cast<void**>(&originalScopeCommand),"\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x50\x87\x00",13}
   ,{0x45A220,SetParent,reinterpret_cast<void**>(&originalSetParent),"\x57\x8B\xF9\x8B\x47\x10",6}
  };
  const char constructorGuard[]={char(0x6A),char(0xFF),char(0x68)};
@@ -977,6 +1080,7 @@ bool Install(){
   {0x5E39E0,"\x8B\x44\x24\x04\x85\xC0\x74\x09",8},
   {0x5FD370,"\x64\xA1\x00\x00\x00\x00\x6A\xFF",8},
   {0x5F18A0,"\x6A\xFF\x68\xC0\x58\x87\x00",7},
+  {0x5DD930,"\x53\x8B\xD1\x8B\x4A\x60\x8B\x5A\x74",9},
   {0x5E5330,"\x6A\xFF\x68\xE0\x51\x87\x00",7},
   {0x5EF450,"\x6A\xFF\x68\x8D\x56\x87\x00",7},
   {0x5E1880,"\x56\x8B\x35\xE8\xDF\x91\x00",7},
@@ -990,6 +1094,7 @@ bool Install(){
  for(const auto& h:hooks){auto address=reinterpret_cast<void*>(h.address);if(MH_CreateHook(address,h.replacement,h.original)!=MH_OK){for(auto a:installed)MH_RemoveHook(a);return false;}installed.push_back(address);}
  for(auto address:installed)MH_QueueEnableHook(address);
  if(MH_ApplyQueued()!=MH_OK){for(auto address:installed){MH_DisableHook(address);MH_RemoveHook(address);}return false;}
+ if(!owned_speedtrap_icons::Install())Log("EVENT_SPEEDTRAP_EXTRA_ICONS_UNAVAILABLE native_boundaries_changed=1");
  enabled=true;return true;
 }
 }

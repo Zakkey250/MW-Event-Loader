@@ -3,11 +3,11 @@
 [English](README.md) · [イベントエディタ](https://zakkey250.github.io/MW-Event-Editor/) · [リリース一覧](https://github.com/Zakkey250/MW-Event-Loader/releases)
 
 
-> **1.2.1** マップ外コースとセーフハウス帰還の設定を追加し、静止スタート対応のドリフト開始演出を選べるようにしました。 [更新内容](docs/Release-Notes-1.2.1.md)
+> **1.2.2** イベント開始時の負荷を軽減し、W2C to MW RC6の道路Addonに対応しました。 [更新内容](docs/Release-Notes-1.2.2.md)
 
 | ダウンロード | 内容 |
 | --- | --- |
-| [MW Event Loader 1.2.1](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.1) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
+| [MW Event Loader 1.2.2](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/v1.2.2) | 本体＋ArmsAssist＋HUD Lifecycle Fix |
 | [MW Cutscene Converter 1.0.0](https://github.com/Zakkey250/MW-Event-Loader/releases/tag/cutscene-converter-v1.0.0) | Windows x64用。初回変換時に承認後ライブラリを自動導入 |
 
 リリースの **Assets** から名前付きZIPを取得してください。GitHubが自動生成する「Source code」はゲーム用MODではありません。NFRR／LBと32bit ASIローダーは別途導入し、武器種目ではMWArsenal本体・アセットも用意してください。

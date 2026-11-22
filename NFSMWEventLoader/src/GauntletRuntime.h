@@ -76,17 +76,37 @@ unsigned ChaseCount(unsigned pursuit){
  (void)pursuit;
  unsigned data=0,count=0,capacity=0;
  if(!Read(0x92CD1C,data)||!Read(0x92CD20,capacity)||!Read(0x92CD24,count)||count>capacity||count>512)return ChaseLimit;
+ const bool includeRoadblocks=MWELRpdHotPursuitScope();
+ const bool excludeDestroyed=MWELHotPursuitActive();
  unsigned chasers=0;
  for(unsigned i=0;i<count;++i){unsigned car=0,driver=0,ai=0;
   if(Read(data+i*4,car)&&Table(car,0x8AA828)&&Read(car+0x94,driver)&&driver==2&&Read(car+0x54,ai)&&Table(ai,0x892480)&&
-     (MWELRpdHotPursuitScope()||!Roadblock(car,ai))&&reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688200)(car)&&
-     (!MWELHotPursuitActive()||!reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688170)(car)))++chasers;
+     (includeRoadblocks||!Roadblock(car,ai))&&reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688200)(car)&&
+     (!excludeDestroyed||!reinterpret_cast<bool(__thiscall*)(unsigned)>(0x688170)(car)))++chasers;
  }return chasers;
 }
 unsigned Handle(unsigned car){unsigned value=0;return Read(car-0x80+8,value)?value:0;}
+unsigned RegisteredVehicle(unsigned handle){
+ // The simulation registry is keyed by live sim handle. Use the same
+ // binary lookup as native race teardown, then validate the vehicle view.
+ static const bool verified=[]{
+  constexpr BYTE expected[]={0x83,0xEC,0x08,0x8B,0x4C,0x24,0x0C,0x56};
+  BYTE actual[sizeof(expected)]{};
+  return Copy(reinterpret_cast<void*>(0x5D51F0),actual,sizeof(actual))&&!memcmp(actual,expected,sizeof(actual));
+ }();
+ unsigned begin=0,count=0;
+ if(!verified||!Read(0x92FEB4,begin)||!begin||!Read(0x92FEBC,count)||!count||count>16384)return 0;
+ auto entry=reinterpret_cast<unsigned(__cdecl*)(unsigned,unsigned,unsigned)>(0x5D51F0)(begin,begin+count*8,handle);
+ unsigned sim=0;
+ if(!entry||!Read(entry+4,sim)||!sim)return 0;
+ auto car=sim+0x80;
+ return Table(car,0x8AA828)&&Handle(car)==handle?car:0;
+}
 unsigned Vehicle(unsigned handle){
+ if(!handle)return 0;
+ if(auto car=RegisteredVehicle(handle))return car;
  unsigned data=0,count=0,capacity=0;
- if(!handle||!Read(0x92CD1C,data)||!Read(0x92CD20,capacity)||!Read(0x92CD24,count)||count>capacity||count>512)return 0;
+ if(!Read(0x92CD1C,data)||!Read(0x92CD20,capacity)||!Read(0x92CD24,count)||count>capacity||count>512)return 0;
  for(unsigned i=0;i<count;++i){unsigned car=0;if(Read(data+i*4,car)&&Table(car,0x8AA828)&&Handle(car)==handle)return car;}return 0;
 }
 police_deployment::Lease deploymentLease;

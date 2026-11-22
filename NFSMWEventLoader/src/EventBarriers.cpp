@@ -17,6 +17,7 @@
 #include "NativeWallSolids.h"
 #include "NativeRaceGuardGroups.h"
 #include "InstalledBarrierTextures.h"
+#include "W2CBarrierLayout.h"
 #pragma comment(lib,"d3d9.lib")
 namespace event_barriers {
 using w2mw::Vec3;using w2mw::Header;using w2mw::Mesh;using w2mw::Vertex;
@@ -174,7 +175,7 @@ bool MWELPrepareBarriers(const std::vector<mwel::EventPackage>& packages,bool pr
  // before registration can inspect grid/barrier state.
  pendingCourses=std::async(std::launch::async,[sources=std::move(sources)](){
  std::vector<Course> prepared;prepared.reserve(sources.size());
- if(!sources.empty())PrepareInstalledBarrierBank();
+ PrepareInstalledBarrierBank();
  for(const auto& source:sources){Course course{};course.key=source.key;
   auto raw=mwel::Read(source.directory/L"course"/L"walls.wmw",128*1024*1024);size_t cursor=0;auto read=[&](void* destination,size_t n){if(n>raw.size()-cursor)throw std::runtime_error("Truncated package wall geometry");memcpy(destination,raw.data()+cursor,n);cursor+=n;};
   unsigned header[3]{};read(header,12);if(header[0]!=0x31434557||header[1]!=course.key||header[2]>2048)throw std::runtime_error("Package wall identity/count");
@@ -207,6 +208,13 @@ bool MWELCompleteBarriers(){
  auto prepared=pendingCourses.get();
  for(const auto& course:prepared){if(MWELNeoLoggingEnabled()){char report[160];sprintf_s(report,"EVENT_PACKAGE_WALLS_PREPARED key=%08X walls=%u owner=EventASI CourseOverrides_written=0",course.key,unsigned(course.walls.size()));MWELNeoLog(report);}}
  courses=std::move(prepared);pendingStarted=false;active=true;return true;
+}
+void MWELPrepareStockBarrierAppearance(){
+ event_barriers::PrepareInstalledBarrierBank();
+ MWELStockBarrierAppearanceFrame();
+}
+void MWELStockBarrierAppearanceFrame(){
+ event_barriers::TryInstalledAppearance(mwel_world_provider::Module());
 }
 bool MWELBarrierSegments(unsigned key,std::vector<MWELBarrierSegment>& output){
  using namespace event_barriers;

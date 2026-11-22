@@ -22,7 +22,7 @@ struct Lost {unsigned cop=0,target=0;ULONGLONG since=0;};
 std::array<Lost,32> lost{};
 
 
-bool Current(){auto p=event_race_policies::Current();return p&&p->authoring.value("combatMode",std::string("none"))=="hotpursuit";}
+bool Current(){const auto clone=registration_experiment::Find(MWELNeoCurrentKey());return clone&&clone->race&&clone->hotPursuit;}
 bool Active(){unsigned race=0,play=0,count=0;return !draining&&Current()&&combat_health_runtime::Read(0x91E000,race)&&
  combat_health_runtime::Read(race+0x1960,play)&&play==1&&combat_health_runtime::Read(race+0x1958,count)&&count>1&&count<=(MWELRpdHotPursuitScope()?9u:8u);}
 unsigned Budget(){if(const auto p=event_race_policies::Current();p&&mwel_rpd::Armed(p->authoring))return mwel_rpd::Allies(p->authoring);unsigned race=0,count=0;return Active()&&combat_health_runtime::Read(0x91E000,race)&&combat_health_runtime::Read(race+0x1958,count)?mwcombat::PoliceBudget(count):0;}
@@ -43,6 +43,8 @@ std::array<unsigned,16> createdPursuits{};
 std::array<unsigned,16> createdTargets{};
 std::array<ULONGLONG,16> nextPursuitCreate{};
 void ReleaseGroups();
+unsigned HandOffPlayerSupport(unsigned eventKey);
+void ReleasePlayerSupport(unsigned handle);
 bool ReleaseGroundSupport(unsigned pursuit,unsigned departing=0);
 std::vector<unsigned> NativeGroups();
 

@@ -1,18 +1,23 @@
 #pragma once
+#include <atomic>
+#include <mutex>
 #include "CombatHealthPolicy.h"
 #include "CombatImpactPolicy.h"
 #include "HotPursuitPolicy.h"
 #include "../../integration/RpdWeaponPolicy.h"
 namespace combat_health_runtime {
 combat_health::Ledger ledger;
-unsigned generation=1;DWORD gameThread=0;bool installed=false,refused=false;
+unsigned generation=1;DWORD gameThread=0;std::atomic<bool> installed{false},refused{false};
 struct Binding {unsigned damage=0,handle=0,driver=0;float original=0,written=0;bool retirementSent=false;};
 std::array<Binding,16> bindings{};
 void(__thiscall* originalDestroy)(void*)=nullptr;
 struct ImpactVector {float x,y,z;};
 using ImpactFn=void(__thiscall*)(unsigned,const ImpactVector*,const ImpactVector*,float,float,unsigned,unsigned);
 ImpactFn originalImpact=nullptr;
-bool impactInstalled=false,impactRefused=false;
+std::atomic<bool> impactInstalled{false},impactRefused{false};
+std::atomic<bool> bindingsPrepared{false},preparationQueued{false};
+std::mutex bindingRegistration;
+std::atomic<bool> impactRequested{false};
 bool nativeTypeGetterVerified=false;
 unsigned(*policeTarget)(unsigned)=nullptr;
 void(*policeDestroyed)(unsigned,unsigned)=nullptr;
@@ -172,7 +177,18 @@ float PoliceContactScale(unsigned victimDriver,unsigned otherDriver){
  return hot_pursuit::PoliceContactScale(policy&&policy->authoring.value("combatMode",std::string("none"))=="hotpursuit",
   victimDriver,otherDriver,policy&&mwel_rpd::PoliceSprint(policy->authoring));
 }
+// One sample is sufficient to distinguish a prepared binding from a physical
+// vehicle contact that has actually returned through the native callback.
+void ReportNativeContact(unsigned other,float impulse){
+ static bool reported=false;
+ if(!installed||gameThread!=GetCurrentThreadId()||reported||!other||!(impulse>0)||!std::isfinite(impulse))return;
+ unsigned table=0,getter=0,type=0;
+ if(!Read(other,table)||!Read(table+4,getter)||getter!=0x686A30||!Read(other+0x30,type)||type!=1)return;
+ reported=true;
+ Log("COMBAT_NATIVE_VEHICLE_CONTACT native_returned=1 impulse=%.3f",impulse);
+}
 void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const ImpactVector* normal,float impulse,float auxiliary,unsigned surface,unsigned other){
+ if(!installed&&!impactRequested.load(std::memory_order_acquire)){originalImpact(self,point,normal,impulse,auxiliary,surface,other);return;}
  if(drift_race::Current()){
   unsigned sim=0,handle=0,otherTable=0,getter=0,type=0;ImpactVector n{};
   const bool vehicle=other&&Read(other,otherTable)&&Read(otherTable+4,getter)&&getter==0x686A30&&Read(other+0x30,type)&&type==1;
@@ -181,7 +197,11 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
  const int slot=ImpactSlot(self);
  if(slot<0){
   unsigned damageTable=0;
-  if(!installed||gameThread!=GetCurrentThreadId()||!Read(self+0x4C,damageTable)||damageTable!=0x8AD40C){originalImpact(self,point,normal,impulse,auxiliary,surface,other);return;}
+  if(!installed||gameThread!=GetCurrentThreadId()||!Read(self+0x4C,damageTable)||damageTable!=0x8AD40C){
+   originalImpact(self,point,normal,impulse,auxiliary,surface,other);
+   if(worldLogEnabled)ReportNativeContact(other,impulse);
+   return;
+  }
   const unsigned prior=attackSource;unsigned otherHandle=0,otherTable=0,driver=~0u;
   attackSource=0; // An environment contact must not inherit another hit's killer.
   if(other&&Read(other+8,otherHandle)&&Read(other+0x80,otherTable)&&otherTable==0x8AA828&&Read(other+0x114,driver)){
@@ -191,6 +211,7 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
   }
   __try {originalImpact(self,point,normal,impulse,auxiliary,surface,other);}
   __finally {attackSource=prior;}
+  if(worldLogEnabled)ReportNativeContact(other,impulse);
   return;
  }
  auto& binding=bindings[slot];Collision(unsigned(slot));
@@ -242,6 +263,7 @@ void __fastcall Impact(unsigned self,void*,const ImpactVector* point,const Impac
  Write(unsigned(slot));Retire(unsigned(slot));
 }
 void __fastcall Destroy(void* self,void*){
+ if(!installed){originalDestroy(self);return;}
  const auto damage=unsigned(self);
  if(installed&&gameThread==GetCurrentThreadId()&&Active()){
   if(impactOwner==damage)return;
@@ -264,32 +286,82 @@ void __fastcall Destroy(void* self,void*){
   if(custom){if(policeDestroyed)policeDestroyed(handle,target);if(cross&&crossKilledByRacer)crossKilledByRacer(handle,attacker);Notice(1,handle);}
  }
 }
-bool EnsureImpact(){
- if(impactInstalled)return true;if(impactRefused)return false;
- const BYTE guard[]={0x6A,0xFF,0x68,0xF7,0xC3,0x87,0,0x64,0xA1};auto address=reinterpret_cast<void*>(0x69C030);
- if(memcmp(address,guard,sizeof(guard))||MH_CreateHook(address,Impact,reinterpret_cast<void**>(&originalImpact))!=MH_OK||MH_EnableHook(address)!=MH_OK){impactRefused=true;return false;}
+void* const impactSite=reinterpret_cast<void*>(0x69C030);
+bool CreateImpact(){
+ const BYTE guard[]={0x6A,0xFF,0x68,0xF7,0xC3,0x87,0,0x64,0xA1};
+ return !memcmp(impactSite,guard,sizeof(guard))&&MH_CreateHook(impactSite,Impact,reinterpret_cast<void**>(&originalImpact))==MH_OK;
+}
+void ImpactReady(){
  const BYTE expected[]={0x8B,0x41,0x30,0xC3};BYTE actual[4]{};
  nativeTypeGetterVerified=Copy(reinterpret_cast<void*>(0x686A30),actual,sizeof(actual))&&!memcmp(actual,expected,sizeof(expected));
- impactInstalled=true;Log("EVENT_NATIVE_CONTACT_ACTIVE shared_owner=1 drift_without_weapons=1");return true;
+ impactInstalled=true;Log("EVENT_NATIVE_CONTACT_ACTIVE shared_owner=1 drift_without_weapons=1");
+}
+bool EnsureImpact(){
+ const std::lock_guard<std::mutex> lock(bindingRegistration);
+ impactRequested.store(true,std::memory_order_release);
+ if(impactInstalled)return true;if(impactRefused)return false;
+ if(!CreateImpact()){impactRefused=true;return false;}
+ if(MH_EnableHook(impactSite)!=MH_OK){MH_RemoveHook(impactSite);impactRefused=true;return false;}
+ ImpactReady();return true;
+}
+void PrepareBindings(){
+  const std::lock_guard<std::mutex> lock(bindingRegistration);
+  if(bindingsPrepared||refused)return;
+  const BYTE expected[]={0x6A,0xFF,0x68,0x1F,0xC4,0x87,0,0x64,0xA1};
+  auto address=reinterpret_cast<void*>(0x69C540);
+  if(memcmp(address,expected,sizeof(expected))||MH_CreateHook(address,Destroy,reinterpret_cast<void**>(&originalDestroy))!=MH_OK){
+   refused=true;Log("COMBAT_HEALTH_REFUSED native_destroy_owner=1");return;
+  }
+  const bool addImpact=!impactInstalled;
+  if(addImpact&&(impactRefused||!CreateImpact())){
+   MH_RemoveHook(address);impactRefused=true;refused=true;Log("COMBAT_HEALTH_REFUSED native_impact_owner=1");return;
+  }
+  // MinHook's queue suspends threads once for the pair. Keep a previously
+  // installed drift callback independent of this registration and rollback.
+  if(MH_QueueEnableHook(address)!=MH_OK||(addImpact&&MH_QueueEnableHook(impactSite)!=MH_OK)||MH_ApplyQueued()!=MH_OK){
+   MH_RemoveHook(address);if(addImpact)MH_RemoveHook(impactSite);
+   refused=true;Log("COMBAT_HEALTH_REFUSED native_activation=1");return;
+  }
+  if(addImpact)ImpactReady();
+  bindingsPrepared=true;
+}
+void CALLBACK PrepareOnWorker(PTP_CALLBACK_INSTANCE instance,void* module){
+ FreeLibraryWhenCallbackReturns(instance,static_cast<HMODULE>(module));
+ PrepareBindings();
+ preparationQueued=false;
 }
 void Frame(){
  const bool event=Active();
- if(!event){if(ledger.event)Restore();if(installed||refused||!NativePursuit())return;}
- gameThread=GetCurrentThreadId();
- if(!installed&&!refused){
+ if(!event&&ledger.event)Restore();
+ if(!event&&(installed||refused))return;
+ const bool activate=event||NativePursuit();
+ if(!installed&&!bindingsPrepared&&!refused){
+  if(!activate){
+   if(preparationQueued)return;
+   static ULONGLONG nextProbe=0;
+   const auto now=GetTickCount64();if(now<nextProbe)return;nextProbe=now+200;
+   unsigned flow=0;if(!Read(0x925E90,flow)||(flow!=3&&flow!=5&&flow!=6))return;
+  }
   auto arms=GetModuleHandleW(L"MWArmsAssist.asi");using Ready=unsigned(__cdecl*)();
   auto ready=arms?reinterpret_cast<Ready>(GetProcAddress(arms,"MWAA_CombatReadyV1")):nullptr;
   if(!ready||!ready())return; // ArmsAssist checks unmodified native bytes first.
-  const BYTE expected[]={0x6A,0xFF,0x68,0x1F,0xC4,0x87,0,0x64,0xA1};
-  auto address=reinterpret_cast<void*>(0x69C540);
-  if(memcmp(address,expected,sizeof(expected))||MH_CreateHook(address,Destroy,reinterpret_cast<void**>(&originalDestroy))!=MH_OK||MH_EnableHook(address)!=MH_OK){
-   refused=true;Log("COMBAT_HEALTH_REFUSED native_destroy_owner=1");return;
+  if(activate)PrepareBindings();
+  else {
+   // The preflight has no game object work. Keep gameplay activation on its
+   // owner thread, and let an immediate pursuit use the synchronous path.
+   if(!preparationQueued.exchange(true)){
+    HMODULE owner{};
+    if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,reinterpret_cast<LPCWSTR>(&PrepareOnWorker),&owner)){
+     if(TrySubmitThreadpoolCallback(&PrepareOnWorker,owner,nullptr))return;
+     FreeLibrary(owner);
+    }
+    preparationQueued=false;
+   }
+   return;
   }
-  if(!EnsureImpact()){
-   MH_DisableHook(address);MH_RemoveHook(address);refused=true;Log("COMBAT_HEALTH_REFUSED native_impact_owner=1");return;
-  }
-  installed=true;Log("COMBAT_HEALTH_ACTIVE racers_maximum=300 police_reference=100 transient=1 breakable_filter_verified=%u",unsigned(nativeTypeGetterVerified));
  }
+ if(!activate||(!installed&&!bindingsPrepared))return;
+ if(!installed){gameThread=GetCurrentThreadId();installed=true;impactRequested.store(true,std::memory_order_release);Log("COMBAT_HEALTH_ACTIVE racers_maximum=300 police_reference=100 transient=1 breakable_filter_verified=%u",unsigned(nativeTypeGetterVerified));}
  if(!installed||!event)return;
  const auto key=MWELNeoCurrentKey();if(ledger.Observe(key,generation,true)){bindings={};impactContacts={};motions={};}
  float motionTime=0;Read(0x9885D8,motionTime);

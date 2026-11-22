@@ -2,9 +2,11 @@
 #include <string>
 #include <cstring>
 namespace event_radar {
+constexpr unsigned tileCount=64;
+inline short SafeTileId(short tile){return unsigned(tile)<tileCount?tile:short(-1);}
 inline void ResetCompressedIndex(void* manager){
  *static_cast<unsigned*>(manager)=0;
- std::memset(static_cast<unsigned char*>(manager)+0x48,0,64*sizeof(unsigned));
+ std::memset(static_cast<unsigned char*>(manager)+0x48,0,tileCount*sizeof(unsigned));
 }
 // Race records may outlive the race. The native map selector checks play mode
 // before examining that record; package selection must use the same boundary.

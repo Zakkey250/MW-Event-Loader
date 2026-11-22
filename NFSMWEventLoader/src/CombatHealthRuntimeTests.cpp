@@ -6,6 +6,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include "../../integration/MWCombatContract.h"
+// The native adapter reads two fixed game globals. Reserve their addresses
+// when Windows maps this test executable, before heaps or mapped files can
+// occupy them. These zero-initialized bytes belong only to the test image.
+#pragma bss_seg(push, ".zfixture")
+static unsigned char nativeFixtureSpace[6*1024*1024];
+#pragma bss_seg(pop)
+static bool ContainsFixtureAddress(unsigned address){
+ const auto start=reinterpret_cast<uintptr_t>(nativeFixtureSpace);
+ return address>=start && address+sizeof(unsigned)<=start+sizeof(nativeFixtureSpace);
+}
 // Exercise the same SEH-backed reader as Runtime.cpp: ReadProcessMemory would
 // conceal first-chance exceptions and make the released-HUD regression vacuous.
 bool Copy(const void* a,void* b,size_t n){__try{memcpy(b,a,n);return true;}__except(EXCEPTION_EXECUTE_HANDLER){return false;}}
@@ -13,6 +23,8 @@ void Log(const char*,...){}
 constexpr int MH_OK=0;
 int MH_CreateHook(void*,void*,void**){return 1;}
 int MH_EnableHook(void*){return 1;}
+int MH_QueueEnableHook(void*){return 1;}
+int MH_ApplyQueued(){return 1;}
 int MH_DisableHook(void*){return 1;}
 int MH_RemoveHook(void*){return 1;}
 namespace event_race_policies {
@@ -22,6 +34,22 @@ Package* Current(){return &package;}
 unsigned MWELNeoCurrentKey(){return 77;}
 bool worldLogEnabled=false;
 bool gauntletBinding=false;
+// This isolated combat-health fixture runs without a police event or a drift driver.
+bool MWELRpdOfficerDisabled(unsigned){return false;}
+bool MWELRpdSprintRetired(unsigned){return false;}
+bool MWELRpdSprintArresting(unsigned){return false;}
+bool MWELHotPursuitAIArresting(unsigned){return false;}
+bool MWELHotPursuitNormalRetired(unsigned){return false;}
+namespace mwel_rpd {
+bool Armed(const nlohmann::json&){return false;}
+bool OfficerHandoff(const nlohmann::json&){return false;}
+bool PoliceSprint(const nlohmann::json&){return false;}
+bool ArmedSuspectSlot(const nlohmann::json&,unsigned,unsigned){return false;}
+}
+namespace drift_race {
+bool Current(){return false;}
+void WallContact(unsigned,float,float,float,bool,bool){}
+}
 bool MWELGauntletParticipant(unsigned slot,unsigned handle){return gauntletBinding&&slot==1&&handle==22&&event_race_policies::package.authoring["combatMode"]=="gauntlet";}
 #include "CombatHealthRuntime.h"
 #include "CombatRetiredMarkers.h"
@@ -124,9 +152,7 @@ int main(int argc,char**){
   auto shifted=body[12]+100;memcpy(conn.data()+0x360,&shifted,4);Check(!combat_visuals::HeadlightAnchor(unsigned(sim.data()),visualMotion,world),"stale stage matrix cannot move smoke to a distant location");
   combat_visuals::connections={};
  }
- void* fixed=VirtualAlloc(reinterpret_cast<void*>(0x910000),0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
- if(fixed!=reinterpret_cast<void*>(0x910000)){const auto error=GetLastError();MEMORY_BASIC_INFORMATION info{};VirtualQuery(reinterpret_cast<void*>(0x910000),&info,sizeof(info));std::printf("FIXTURE_ADDRESS_CONFLICT error=%lu base=%p owner=%p bytes=%zu state=%lX type=%lX\n",error,info.BaseAddress,info.AllocationBase,info.RegionSize,info.State,info.Type);}
- Check(fixed==reinterpret_cast<void*>(0x910000),"isolated native-global fixture");
+ Check(ContainsFixtureAddress(0x91E000),"test image owns native race global");
  std::vector<BYTE> status(0x1A00),racerMemory(512),copMemory(256),racerSim(256),copSim(64);
  const auto race=unsigned(status.data()),racer=unsigned(racerMemory.data()+192),cop=unsigned(copMemory.data()+64);
  *reinterpret_cast<unsigned*>(0x91E000)=race;
@@ -216,7 +242,7 @@ int main(int argc,char**){
  // Exercise the actual production impact adapter and ownership restoration.
  event_race_policies::package.authoring["combatMode"]="armsrace";*reinterpret_cast<BYTE*>(race+0x18+0x1F)=0;
  NewGeneration();Frame();Observe(0,12,racer,0,&health,sizeof(health));
- void* clock=VirtualAlloc(reinterpret_cast<void*>(0x980000),0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);Check(clock==reinterpret_cast<void*>(0x980000),"native simulation clock fixture");
+ Check(ContainsFixtureAddress(0x9885D8),"test image owns native simulation clock");
  std::array<BYTE,128> specs{};*reinterpret_cast<float*>(specs.data()+0x64)=25;
  const auto self=racer-0x4C;*reinterpret_cast<unsigned*>(self+0x78)=unsigned(specs.data());
  originalImpact=reinterpret_cast<ImpactFn>(ImpactStub);impactMass=ImpactMassStub;ImpactVector point{},normal{1,0,0};
@@ -323,6 +349,5 @@ int main(int argc,char**){
   const double unrelatedUs=double(finish.QuadPart-start.QuadPart)*1000000.0/double(frequency.QuadPart)/(iterations*100);
   std::printf("BENCH adapter_owned_us=%.3f unbound_fastpath_us=%.3f actual_game_frame_acceptance=0\n",ownedUs,unrelatedUs);
  }
- VirtualFree(clock,0,MEM_RELEASE);
- VirtualFree(fixed,0,MEM_RELEASE);std::printf("PASS %u native combat-health ownership and effect checks\n",checks);
+ std::printf("PASS %u native combat-health ownership and effect checks\n",checks);
 }

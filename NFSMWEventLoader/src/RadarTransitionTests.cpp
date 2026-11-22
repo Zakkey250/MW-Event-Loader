@@ -20,6 +20,7 @@ static void __cdecl Upper(char* text){for(;*text;++text)*text=char(std::toupper(
 static unsigned __cdecl Exists(const char*){return 1;}
 int wmain(int argc,wchar_t** argv){try{
  Check(argc==2,"Provide a supported executable");
+ Check(event_radar::SafeTileId(-1)==-1&&event_radar::SafeTileId(0)==0&&event_radar::SafeTileId(63)==63&&event_radar::SafeTileId(64)==-1&&event_radar::SafeTileId(581)==-1,"Out-of-bounds HUD tile reached the native tile bank");
  Check(event_radar::UseCourse(0,1,123)&&!event_radar::UseCourse(2,1,123)&&!event_radar::UseCourse(0,0,123)&&!event_radar::UseCourse(0,1,0),"Retained race record overrides native roaming map");
  for(bool roaming:{false,true})for(bool owned:{false,true}){Backend b;auto r=event_radar::Restore(b,roaming,owned);if(roaming&&owned)Check(r==event_radar::RestoreResult::Queued&&b.order=="QCRIPL"&&b.owners==1&&b.prefix=="MINI_MAP","Restore ordering/ownership differs");else Check(r==event_radar::RestoreResult::Skipped&&b.order.empty()&&b.prefix=="MINI_MAP_OWNED","Unowned or racing map changed");}
  Backend missing;missing.query=false;Check(event_radar::Restore(missing,true,true)==event_radar::RestoreResult::Unavailable&&missing.order=="Q"&&missing.owners==1&&missing.prefix=="MINI_MAP_OWNED","Unavailable world map destroyed current owner");

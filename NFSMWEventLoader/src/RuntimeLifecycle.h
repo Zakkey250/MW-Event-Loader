@@ -1,12 +1,18 @@
 #pragma once
 #include "TougeSpeechLifetime.h"
 namespace gauntlet_runtime {unsigned Vehicle(unsigned);}
+namespace hot_pursuit_runtime {
+unsigned HandOffPlayerSupport(unsigned eventKey);
+void ReleasePlayerSupport(unsigned handle);
+}
 // Production observers never bootstrap a race or change player ownership.
 // Explicit isolated career-autodrive fixtures are gated separately below.
 namespace runtime_lifecycle {
 bool enabled=false,ending=false;
 BYTE* currentRace=nullptr;
 unsigned currentKey=0,recordedGoals=0;
+unsigned resultsOwner=0;
+unsigned roamingPursuitPlayer=0;
 bool wasRunning=false;
 bool tougeReturnPending=false;
 bool tougeExitAwaiting=false;
@@ -68,7 +74,7 @@ void QueueTougeSafehouse(){
  else Log("EXPERIMENT_RACE_ABORT touge_safehouse_command_surface");
 }
 float previousSeconds=0;
-struct ValidationMotion {unsigned handle=0,routeRevision=0;int checkpoint=-1;float station=0,gateBest=std::numeric_limits<float>::infinity();float position[3]{};ULONGLONG progressed=0,pending=0,moved=0,logged=0;bool recoveryVerificationUsed=false;};
+struct ValidationMotion {unsigned handle=0,routeRevision=0;int checkpoint=-1;float station=0,gateBest=std::numeric_limits<float>::infinity();float position[3]{};ULONGLONG progressed=0,pending=0,moved=0,logged=0;bool stationObserved=false,recoveryVerificationUsed=false;};
 ValidationMotion validation[16]{};
 bool validationEnabled=false;
 bool careerAutodrive=false;
@@ -82,6 +88,7 @@ template<class T>T Read(void* pointer,unsigned offset=0){T value{};if(pointer)Co
 #include "EventResourceDiagnostics.h"
 #include "PlayerResourceDiagnostics.h"
 void AuditCheckpoints(BYTE* race){
+ if(!worldLogEnabled)return;
  auto first=Read<BYTE**>(race,0x19AC),end=Read<BYTE**>(race,0x19B0);auto bytes=uintptr_t(end)-uintptr_t(first);if(!first||!end||bytes>64*4||bytes%4)return;
  for(unsigned i=0;i<bytes/4;++i){auto trigger=Read<BYTE*>(first,i*4);Log("EVENT_RUNTIME_NATIVE_GATE index=%u key=%08X object=%08X enabled=%u active=%u references=%d",i,trigger?reinterpret_cast<unsigned(__thiscall*)(void*)>(0x452430)(trigger+4):0,unsigned(trigger),Read<unsigned>(trigger,0x74),unsigned(Read<BYTE>(trigger,0xC4)),Read<int>(trigger,0xC8));}
 }
@@ -107,10 +114,17 @@ void Validate(BYTE* race,float seconds){
   NeoBodyMotion body{};if(!Body(handle,body))continue;int cp=Read<int>(info,0x2C);auto& m=validation[slot];
   if(m.handle!=handle){m={};m.handle=handle;m.checkpoint=-1;memcpy(m.position,body.position,12);m.moved=now;}
   if(std::hypot(body.position[0]-m.position[0],body.position[2]-m.position[2])>.25f){memcpy(m.position,body.position,12);m.moved=now;}
-  if(cp!=m.checkpoint){m.checkpoint=cp;m.progressed=m.pending=0;m.gateBest=std::numeric_limits<float>::infinity();m.recoveryVerificationUsed=false;}
+  if(cp!=m.checkpoint){m.checkpoint=cp;m.progressed=m.pending=0;m.gateBest=std::numeric_limits<float>::infinity();m.stationObserved=m.recoveryVerificationUsed=false;}
   float station=0;unsigned revision=0;bool progress=routeRequired&&cp>=0&&MWELNeoRouteProgress(handle,unsigned(cp),&station,&revision);
-  if(progress&&m.routeRevision!=revision){m.routeRevision=revision;m.station=station;m.progressed=now;m.recoveryVerificationUsed=false;Log("EVENT_RUNTIME_CHECKED_ROAD_REBASE handle=%u CP=%d revision=%u station=%.3f native_progress_written=0 body_watchdog_unchanged=1",handle,cp,revision,station);}
-  if(progress){if(!m.progressed||station>m.station+5.f&&now-m.moved<1000){m.station=station;m.progressed=now;m.recoveryVerificationUsed=false;}}
+  if(progress){
+   // Gate distance may update the watchdog before NeoAI reports the new leg.
+   // Establish its own projection baseline even when that watchdog was set.
+   const bool rebase=m.stationObserved&&m.routeRevision!=revision;
+   if(!m.stationObserved||rebase||(station>m.station+5.f&&now-m.moved<1000)){
+    m.stationObserved=true;m.routeRevision=revision;m.station=station;m.progressed=now;m.recoveryVerificationUsed=false;
+    if(rebase)Log("EVENT_RUNTIME_CHECKED_ROAD_REBASE handle=%u CP=%d revision=%u station=%.3f native_progress_written=0 body_watchdog_unchanged=1",handle,cp,revision,station);
+   }
+  }
   // Police can push a racer off the projected line. A stale line cursor is
   // not proof that its physically moving body failed to recover. Permit only
   // a new best approach to the real pending gate to extend this observation;
@@ -176,33 +190,38 @@ void FrameUnsafe(){
  native_runtime_diagnostics::Hud();
  profile_progress::RestoreNativeProgress();
  auto race=Read<BYTE*>(reinterpret_cast<void*>(0x91E000));auto key=MWELNeoCurrentKey();
- bool running=key&&race&&Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6&&Read<unsigned>(race,0x1960)==1&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978);
+ const bool nativeRunning=race&&Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6&&Read<unsigned>(race,0x1960)==1&&Read<BYTE>(race,0x198A)&&Read<BYTE>(race,0x1978);
+ const bool running=key&&nativeRunning;
  float seconds=running?Read<float>(race,0x18+0x150):0;
  if(running&&Read<BYTE>(race,0x18+0x154))seconds+=reinterpret_cast<float(__cdecl*)()>(0x6E8DE0)()-Read<float>(race,0x18+0x14C);
  bool restart=running&&(!wasRunning||race!=currentRace||key!=currentKey||(std::isfinite(seconds)&&seconds+.25f<previousSeconds));
- if(restart){MWELResetNeoDriverRace();MWELResetNeoProviderRace();recordedGoals=0;ending=false;for(auto& motion:validation)motion={};Log("EVENT_RUNTIME_RACE_EPOCH key=%08X race=%08X player_controller_changed=%u retry_state_reset=1",key,unsigned(race),unsigned(careerAutodrive&&validationEnabled));AuditCheckpoints(race);}
- if(key!=currentKey&&currentKey){MWELResetNeoDriverRace();MWELResetNeoProviderRace();recordedGoals=0;Log("EVENT_RUNTIME_RACE_EXIT old_key=%08X",currentKey);
-  // Geometry is released at native Stop, before simulation teardown. This
-  // later display callback observes the exit but must not unregister CARP
-  // triggers after their physical world has already been dismantled.
+ if(restart){resultsOwner=0;roamingPursuitPlayer=0;event_speedtraps::Reset();MWELResetNeoDriverRace();MWELResetNeoProviderRace();recordedGoals=0;ending=false;for(auto& motion:validation)motion={};Log("EVENT_RUNTIME_RACE_EPOCH key=%08X race=%08X player_controller_changed=%u retry_state_reset=1",key,unsigned(race),unsigned(careerAutodrive&&validationEnabled));AuditCheckpoints(race);}
+ if(key!=currentKey&&currentKey){event_maps::RestoreCalibrations();MWELResetNeoDriverRace();MWELResetNeoProviderRace();recordedGoals=0;Log("EVENT_RUNTIME_RACE_EXIT old_key=%08X",currentKey);
+  // Only native lifecycle boundaries own geometry teardown.
  }
  // Explicit local frontend autopilot must relinquish input after native end.
- if(careerAutodrive&&validationEnabled&&wasRunning&&!running){
+ static bool previousAutodrive=false;
+ const bool autodrive=careerAutodrive&&validationEnabled&&nativeRunning;
+ if(previousAutodrive&&!autodrive){
   const BYTE guard[]={0x8B,0x44,0x24,0x04,0x85,0xC0,0x75,0x12};
   if(!memcmp(reinterpret_cast<void*>(0x612420),guard,sizeof(guard))){
    reinterpret_cast<void(__cdecl*)(unsigned)>(0x612420)(0);
    Log("EXPERIMENT_CAREER_INPUT_RESTORED native_end_observed=1 result_state_written=0");
   }
  }
+ previousAutodrive=autodrive;
+ if(autodrive)reinterpret_cast<void(__cdecl*)(unsigned)>(0x6123B0)(0);
  currentRace=race;currentKey=key;wasRunning=running;previousSeconds=seconds;
  if(running){
   // Explicit isolated frontend playtest: use native player autopilot and the
   // same checked NeoAI trail as opponents. No debug race start or CP writes.
-  if(careerAutodrive&&validationEnabled)reinterpret_cast<void(__cdecl*)(unsigned)>(0x6123B0)(0);
   Validate(race,seconds);Resources(race,key);
  }
- event_speedtraps::Frame(key,running);
- auto mapKey=Read<unsigned>(race,0x1960)==1?key:0;
+ event_speedtraps::Frame(key,race,nativeRunning);
+ // The result menu retains the race record and can retain its minimap until
+ // the next rival stage creates a HUD. Keep the calibration restored after
+ // Stop, including while the old record still reports Race play mode.
+ auto mapKey=key!=resultsOwner&&Read<unsigned>(race,0x1960)==1?key:0;
  event_maps::Frame(mapKey!=0,mapKey);
  // A Touge exit immediately unloads the world. Starting the asynchronous
  // roaming radar load here leaves its callback reading a destroyed RaceStatus
@@ -255,23 +274,35 @@ void __cdecl Finish(void* argument){
  if(genuine){recordedGoals|=1u<<slot;Log("EVENT_RUNTIME_GENUINE_GOAL key=%08X slot=%d player=%u forced=0",key,slot,unsigned(player));}
  if(genuine&&player&&race==Read<BYTE*>(reinterpret_cast<void*>(0x91E000)))profile_progress::Record(*package,race+0x18+slot*0x194,true,false);
 }
-void __fastcall End(void* race,void*){bool before=ending;ending=true;checkpoint_display::Reset();MWELCombatRaceExit(true);originalEnd(race);ending=before;}
+void __fastcall End(void* race,void*){
+ bool before=ending;ending=true;
+ auto key=MWELNeoCurrentKey();
+ if(key==registration_experiment::mountedOwner)resultsOwner=key;
+ event_speedtraps::Reset();
+ checkpoint_display::Reset();MWELCombatRaceExit(true);originalEnd(race);ending=before;
+}
+unsigned GeometryOwner(){
+ if(registration_experiment::mountedOwner)return registration_experiment::mountedOwner;
+ return MWELNeoCurrentKey();
+}
+void ReleaseGates(unsigned key){
+ if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
+}
 unsigned StopUnsafe(bool resultPending){
  if(ReturnAfterEvent())tougeExitAwaiting=true;
  // Cover a definition already detached before the return request. The
  // detachment hook handles subsequent native resource callbacks as well.
  RetireDetachedTougeSpeech();
- checkpoint_display::Reset();MWELCombatRaceExit(resultPending);
+ hot_pursuit_runtime::ReleasePlayerSupport(roamingPursuitPlayer);
+ event_speedtraps::Reset();checkpoint_display::Reset();MWELCombatRaceExit(resultPending);
  PlayerResourceBoundary("before_owned_stop");
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=stop objects=%u",removed);
- auto key=MWELNeoCurrentKey();Log("EVENT_RUNTIME_NATIVE_STOP key=%08X before_simulation_teardown=1",key);
+ auto key=GeometryOwner();Log("EVENT_RUNTIME_NATIVE_STOP key=%08X before_simulation_teardown=1",key);
  event_maps::RestoreCalibrations();
  // Native Stop also runs while the result menu still owns a retry-capable
  // activity. That activity reuses its marker references rather than InitRacers
- // on retry. Retain this completed combat race's objects until native roaming
- // or world teardown, which already release the exact owner before unmount.
- if(resultPending)Log("EVENT_RUNTIME_RESULT_GEOMETRY_RETAINED key=%08X native_retry_references_live=1 release_boundary=roaming_or_world",key);
- else if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
+ // on retry. Native roaming or world teardown retires these references.
+ if(key&&(resultPending||resultsOwner==key))Log("EVENT_RUNTIME_RESULT_GEOMETRY_RETAINED key=%08X native_retry_references_live=1 release_boundary=roaming_or_world",key);
  MWELResetNeoDriverRace();MWELResetNeoProviderRace();return key;
 }
 void ReleaseCharactersUnsafe(unsigned key){
@@ -282,25 +313,26 @@ void ReleaseCharactersUnsafe(unsigned key){
 void __cdecl Stop(){
  const bool resultPending=MWELCombatResultPending();
  unsigned key=0;__try{key=StopUnsafe(resultPending);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_stop_teardown_fault=%08X native_stop_retained=1",unsigned(GetExceptionCode()));}
+ const bool retain=key&&(resultPending||resultsOwner==key);
  // An owned cleanup fault must never skip the game's simulation teardown.
  // Native exceptions remain native exceptions, rather than being swallowed.
  originalStop();
  PlayerResourceBoundary("after_native_stop");
- __try{if(!resultPending)ReleaseCharactersUnsafe(key);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_character_release_fault=%08X",unsigned(GetExceptionCode()));}
+ __try{if(!retain){ReleaseGates(key);ReleaseCharactersUnsafe(key);}}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_after_stop_fault=%08X",unsigned(GetExceptionCode()));}
 }
 unsigned RoamingUnsafe(){
  if(ReturnAfterEvent())tougeReturnPending=true;
- checkpoint_display::Reset();MWELCombatRaceExit();
+ event_speedtraps::Reset();checkpoint_display::Reset();MWELCombatRaceExit();
  PlayerResourceBoundary("before_owned_roaming");
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=roaming objects=%u",removed);
- // Career abort enters roaming directly and bypasses the QuickRace Stop
- // callback. Release while the old race parameters and CARP world are live.
- auto key=MWELNeoCurrentKey();Log("EVENT_RUNTIME_ENTER_ROAMING key=%08X before_native_mode_reset=1",key);
+ // Capture the owner before roaming clears the native race parameters.
+ auto key=GeometryOwner();Log("EVENT_RUNTIME_ENTER_ROAMING key=%08X before_native_mode_reset=1",key);
+ if(auto player=hot_pursuit_runtime::HandOffPlayerSupport(key))roamingPursuitPlayer=player;
  event_maps::RestoreCalibrations();
- if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
  MWELResetNeoDriverRace();MWELResetNeoProviderRace();return key;
 }
 void AfterRoamingUnsafe(unsigned key){
+ resultsOwner=0;ReleaseGates(key);
  ReleaseCharactersUnsafe(key);
  if(!tougeReturnPending&&!tougeExitAwaiting&&!tougeReturnInFlight)package_resources::RestoreRoamingRadar();
 }
@@ -312,11 +344,12 @@ void __fastcall Roaming(void* self,void*){
  __try{AfterRoamingUnsafe(key);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_after_roaming_fault=%08X",unsigned(GetExceptionCode()));}
 }
 void WorldUnloadUnsafe(void* self){
- checkpoint_display::Reset();MWELCombatRaceExit();
+ hot_pursuit_runtime::ReleasePlayerSupport(roamingPursuitPlayer);roamingPursuitPlayer=0;
+ event_speedtraps::Reset();checkpoint_display::Reset();MWELCombatRaceExit();
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=world_unload objects=%u",removed);
- auto key=MWELNeoCurrentKey();Log("EVENT_RUNTIME_WORLD_UNLOAD key=%08X observed_key=%08X native_state=%u before_streaming_teardown=1",key,currentKey,Read<unsigned>(reinterpret_cast<void*>(0x925E90)));
+ auto key=GeometryOwner();Log("EVENT_RUNTIME_WORLD_UNLOAD key=%08X observed_key=%08X native_state=%u before_streaming_teardown=1",key,currentKey,Read<unsigned>(reinterpret_cast<void*>(0x925E90)));
  event_maps::RestoreCalibrations();
- if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
+ resultsOwner=0;ReleaseGates(key);
  MWELResetNeoDriverRace();MWELResetNeoProviderRace();
 }
 void __fastcall WorldUnload(void* self,void*){__try{WorldUnloadUnsafe(self);}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_world_unload_teardown_fault=%08X native_world_unload_retained=1",unsigned(GetExceptionCode()));}originalWorldUnload(self);if(tougeExitAwaiting)QueueTougeSafehouse();}
@@ -324,11 +357,12 @@ void ExitWorldUnsafe(){
  // Retain the event's safehouse return through the native result ExitWorld.
  if(ReturnAfterEvent())tougeExitAwaiting=true;
  RetireDetachedTougeSpeech();
- checkpoint_display::Reset();MWELCombatRaceExit();
+ hot_pursuit_runtime::ReleasePlayerSupport(roamingPursuitPlayer);roamingPursuitPlayer=0;
+ event_speedtraps::Reset();checkpoint_display::Reset();MWELCombatRaceExit();
  MWELCancelCarbonIntro();auto removed=expanded_leaderboard::Reset();Log("EVENT_HUD_RUNTIME_ROWS_RELEASED boundary=exit_world objects=%u",removed);
- auto key=MWELNeoCurrentKey();Log("EVENT_RUNTIME_EXIT_WORLD key=%08X observed_key=%08X native_state=%u before_state7=1",key,currentKey,Read<unsigned>(reinterpret_cast<void*>(0x925E90)));
+ auto key=GeometryOwner();Log("EVENT_RUNTIME_EXIT_WORLD key=%08X observed_key=%08X native_state=%u before_state7=1",key,currentKey,Read<unsigned>(reinterpret_cast<void*>(0x925E90)));
  event_maps::RestoreCalibrations();
- if(key&&!registration_experiment::ReleaseGeometry(key)){enabled=false;Log("REFUSED owned_geometry_teardown owner=%08X",key);}
+ resultsOwner=0;ReleaseGates(key);
  MWELResetNeoDriverRace();MWELResetNeoProviderRace();
 }
 void __cdecl ExitWorld(){__try{ExitWorldUnsafe();}__except(EXCEPTION_EXECUTE_HANDLER){enabled=false;Log("EXPERIMENT_RACE_ABORT owned_exit_world_teardown_fault=%08X native_exit_world_retained=1",unsigned(GetExceptionCode()));}originalExitWorld();}

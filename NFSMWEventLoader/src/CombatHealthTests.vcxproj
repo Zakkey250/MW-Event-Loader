@@ -8,7 +8,7 @@
  <PropertyGroup Condition="'$(RuntimeHarness)'=='true'"><IntDir>$(ProjectDir)..\build\obj-combat-health-runtime-tests\</IntDir><TargetName>CombatHealthRuntimeTests</TargetName></PropertyGroup>
  <ItemDefinitionGroup><ClCompile><LanguageStandard>stdcpp17</LanguageStandard><RuntimeLibrary>MultiThreaded</RuntimeLibrary><Optimization>MaxSpeed</Optimization><PreprocessorDefinitions>NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile><Link><SubSystem>Console</SubSystem></Link></ItemDefinitionGroup>
  <ItemDefinitionGroup><ClCompile><AdditionalIncludeDirectories>$(ProjectDir)..\..\NFSMWNativeFreeRoamRacers\third_party;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile></ItemDefinitionGroup>
- <ItemDefinitionGroup Condition="'$(RuntimeHarness)'=='true'"><Link><BaseAddress>0x10000000</BaseAddress><RandomizedBaseAddress>false</RandomizedBaseAddress></Link></ItemDefinitionGroup>
+ <ItemDefinitionGroup Condition="'$(RuntimeHarness)'=='true'"><Link><BaseAddress>0x00400000</BaseAddress><RandomizedBaseAddress>false</RandomizedBaseAddress></Link></ItemDefinitionGroup>
  <ItemGroup><ClCompile Include="CombatHealthTests.cpp" Condition="'$(RuntimeHarness)'!='true'"/><ClCompile Include="CombatHealthRuntimeTests.cpp" Condition="'$(RuntimeHarness)'=='true'"/></ItemGroup>
  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -82,6 +82,7 @@ static FILE* logFile=nullptr;
 PVOID crashObserver=nullptr;
 std::vector<mwel::EventPackage> packages;
 bool productionRuntime=false,runtimeReady=false,neoDiagnosticsEnabled=false;
+std::atomic<bool> stockBarrierAppearanceOnly{false};
 void*(__thiscall* originalDatabaseConstructor)(void*);
 bool Copy(const void* from,void* to,size_t count){__try{memcpy(to,from,count);return true;}__except(EXCEPTION_EXECUTE_HANDLER){return false;}}
 LONG CALLBACK ObserveCrash(EXCEPTION_POINTERS* fault){
@@ -322,6 +323,7 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_GauntletV1(){return gaunt
 #include "CombatDefeatExperiment.h"
 bool MWELCombatVisualHeld(unsigned slot){return !productionRuntime&&slot==0&&combat_defeat_experiment::enabled&&combat_defeat_experiment::epochs==1&&((combat_defeat_experiment::visual&&GetTickCount64()-combat_defeat_experiment::visualBegan>=12000)||(combat_defeat_experiment::arrest&&combat_defeat_experiment::visualPlayerReleased));}
 void MWELCombatNewGeneration(){
+ event_speedtraps::Reset();
  rpd_intro_music::Reset();
  rpd_finish_camera::Reset();
  rpd_police_autodrive::Reset();
@@ -511,6 +513,11 @@ void Start(){
  Log("EVENT_SHARED_HUD_FEATURES active=%u",unsigned(sharedHud));
  if(sharedHud)MWELStartCarbonIntro();
  world_compatibility::Context world(game);
+ const auto rememberRoadMaster=[&]{
+  if(!productionRuntime)return;
+  try{world.RememberCurrent();}
+  catch(const std::exception& error){Log("ROAD_COMPATIBILITY_REFERENCE_WRITE_FAILED reason=%s",error.what());}
+ };
  std::vector<mwel::fs::path> eventFolders{mwel_paths::Events(game)};
  for(const auto& directory:eventFolders)if(mwel::fs::exists(directory))for(const auto& entry:mwel::fs::directory_iterator(directory)){
   if(!entry.is_directory()||!mwel::EventId(entry.path().filename().string()))continue;
@@ -552,7 +559,14 @@ void Start(){
   catch(const std::exception& error){Log("PACKAGE_REFUSED id=%s reason=%s",entry.path().filename().string().c_str(),error.what());}
  }
  mwel::SelectPackages(packages,[](const auto& p){std::error_code error;auto time=mwel::fs::last_write_time(p.directory/L"event.json",error);return error?mwel::fs::file_time_type::min():time;},[](const auto& skipped,const auto& retained,const char* reason){Log("PACKAGE_SUPERSEDED id=%s retained=%s target=%s reason=%s newest_installed_event=1 files_preserved=1",skipped.id.c_str(),retained.id.c_str(),skipped.nativeEventId.c_str(),reason);});
- if(packages.empty()){Log("EVENT_LOADER_IDLE packages=0");return;}
+ if(packages.empty()){
+  if(productionRuntime&&(mwel_world_provider::Module()||mwel::fs::is_regular_file(game/L"W2CMWPublic"/L"installation.json"))){
+   MWELPrepareStockBarrierAppearance();
+   stockBarrierAppearanceOnly.store(true,std::memory_order_release);
+  }
+  rememberRoadMaster();
+  Log("EVENT_LOADER_IDLE packages=0");return;
+ }
  auto address=reinterpret_cast<void*>(0x6039C0);const BYTE expected[]={0x56,0x8B,0xF1,0x57,0x33,0xFF,0x89,0x3E};
  if(memcmp(address,expected,sizeof(expected))){Log("REFUSED database_constructor_guard");return;}
  if(*reinterpret_cast<void**>(0x91E004)){ObserveDatabase(*reinterpret_cast<void**>(0x91E004));Log("REFUSED database_already_constructed");return;}
@@ -636,6 +650,7 @@ void Start(){
  if(MH_EnableHook(address)!=MH_OK){MH_RemoveHook(address);Log("REFUSED database_constructor_activation");return;}
  Log("REGISTRATION_PROBE_ACTIVE original_collections_modified=0 additional_descriptor_experiment=%u save_virtualizer_required=0 ready=0",unsigned(registration_experiment::enabled&&registration_experiment::enumerateAdditional));
  runtimeReady=productionRuntime;
+ rememberRoadMaster();
 }
 }
 #pragma comment(linker,"/EXPORT:InitializeASI=_InitializeASI")
@@ -652,6 +667,7 @@ extern "C" __declspec(dllexport) unsigned __cdecl MWEL_EventSafehouseReturnV1(){
 bool MWELRpdOfficerIgnoresGuards(unsigned worldId){return RpdOfficerIgnoresGuards(worldId);}
 #pragma comment(linker,"/EXPORT:MWEL_FrameV1=_MWEL_FrameV1")
 extern "C" __declspec(dllexport) void __cdecl MWEL_FrameV1(){
+ if(stockBarrierAppearanceOnly.load(std::memory_order_acquire)){MWELStockBarrierAppearanceFrame();return;}
  if(!runtime_lifecycle::enabled&&!race_start_experiment::enabled)return;
  __try{
   // ASI initialization runs concurrently with the loader. Wait for the first

@@ -11,6 +11,7 @@ std::vector<std::unique_ptr<Map>> maps;
 void*(__cdecl* originalCreate)(const char*,int,int,int,int);
 void*(__cdecl* originalTexture)(unsigned,int,int);
 bool(__cdecl* originalMapLoad)(int,char*,int,char*,int);
+void(__thiscall* originalUpdateTiles)(void*,const short*,int);
 bool roamingRestorePending=false;
 unsigned PlayMode(){BYTE* race=nullptr;unsigned mode=~0u;if(Copy(reinterpret_cast<void*>(0x91E000),&race,4)&&race)Copy(race+0x1960,&mode,4);return mode;}
 unsigned TextureHash(const std::string& text){unsigned hash=~0u;for(unsigned char c:text)hash=hash*33+c;return hash;}
@@ -56,6 +57,23 @@ bool __cdecl MapLoad(int mode,char* prefix,int prefixSize,char* path,int pathSiz
  }
  return originalMapLoad(mode,prefix,prefixSize,path,pathSize);
 }
+void __fastcall UpdateTiles(void* manager,void*,const short* tiles,int count){
+ // The native HUD passes four neighbors, or zero during cleanup. Its
+ // compressed tile lookup tests negative IDs but has no upper bound.
+ short ids[4];
+ if(count==4&&tiles){
+  bool changed=false;
+  for(int i=0;i<count;++i){ids[i]=event_radar::SafeTileId(tiles[i]);changed|=ids[i]!=tiles[i];}
+  if(changed){
+   if(worldLogEnabled){
+    static DWORD last=0;const auto now=GetTickCount();
+    if(now-last>=1000){last=now;Log("EVENT_RADAR_TILE_OUT_OF_RANGE ids=%d,%d,%d,%d",tiles[0],tiles[1],tiles[2],tiles[3]);}
+   }
+   tiles=ids;
+  }
+ }
+ originalUpdateTiles(manager,tiles,count);
+}
 struct NativeRadar {
  BYTE* manager;
  void Trace(const char* boundary){
@@ -77,6 +95,10 @@ struct NativeRadar {
 };
 void RestoreRoamingRadar(){
  if(!enabled||PlayMode()!=0)return;
+ unsigned flow=0,stage=0,ready=0;
+ if(!Copy(reinterpret_cast<void*>(0x925E90),&flow,4)||flow!=6||
+    !Copy(reinterpret_cast<void*>(0x91CF14),&stage,4)||stage!=3||
+    !Copy(reinterpret_cast<void*>(0x8F511C),&ready,4)||ready!=2)return;
  BYTE* manager=nullptr;char previous[65]{};
  if(!Copy(reinterpret_cast<void*>(0x91CEFC),&manager,4)||!manager||!Copy(manager+8,previous,64))return;
  // A safehouse/world reload owns this transition already. Its new HUD has
@@ -152,16 +174,23 @@ bool Activate(){
  const BYTE streamGuard[]={0x8B,0x44,0x24,0x1C,0x8B,0x4C,0x24,0x18};
  if(memcmp(reinterpret_cast<void*>(0x5672F0),clearGuard,sizeof(clearGuard))||memcmp(reinterpret_cast<void*>(0x663F00),releaseGuard,sizeof(releaseGuard))||memcmp(reinterpret_cast<void*>(0x661760),streamGuard,sizeof(streamGuard)))return false;
  if(memcmp(reinterpret_cast<void*>(0x65FD30),createGuard,sizeof(createGuard))||memcmp(reinterpret_cast<void*>(0x503400),textureGuard,sizeof(textureGuard))||memcmp(reinterpret_cast<void*>(0x6616F0),beginGuard,sizeof(beginGuard))||memcmp(reinterpret_cast<void*>(0x57BEC0),mapGuard,sizeof(mapGuard)))return false;
- auto factory=reinterpret_cast<void*>(0x65FD30),texture=reinterpret_cast<void*>(0x503400),mapLoader=reinterpret_cast<void*>(0x57BEC0);
+ auto factory=reinterpret_cast<void*>(0x65FD30),texture=reinterpret_cast<void*>(0x503400),mapLoader=reinterpret_cast<void*>(0x57BEC0),updateTiles=reinterpret_cast<void*>(0x5672F0);
  // V2 publishes its map aliases immediately after native DB publication.
  // Leave the texture entry intact for that guarded installation, then chain
  // the published provider from our first game frame. Its historical binary
  // allowlist cannot recognize a freshly rebuilt EventLoader detour.
  const bool deferTexture=mwel_world_provider::SourceModule()!=nullptr;
- if(MH_CreateHook(factory,Create,reinterpret_cast<void**>(&originalCreate))!=MH_OK)return false;
- if(!deferTexture&&MH_CreateHook(texture,Texture,reinterpret_cast<void**>(&originalTexture))!=MH_OK){MH_RemoveHook(factory);return false;}
- if(MH_CreateHook(mapLoader,MapLoad,reinterpret_cast<void**>(&originalMapLoad))!=MH_OK){MH_RemoveHook(factory);MH_RemoveHook(texture);return false;}
- if(MH_QueueEnableHook(factory)!=MH_OK||(!deferTexture&&MH_QueueEnableHook(texture)!=MH_OK)||MH_QueueEnableHook(mapLoader)!=MH_OK||MH_ApplyQueued()!=MH_OK){MH_DisableHook(factory);MH_DisableHook(texture);MH_DisableHook(mapLoader);MH_RemoveHook(factory);MH_RemoveHook(texture);MH_RemoveHook(mapLoader);return false;}
+ struct Hook{void* site;void* entry;void** original;};
+ const Hook hooks[]={{factory,Create,reinterpret_cast<void**>(&originalCreate)},
+  {mapLoader,MapLoad,reinterpret_cast<void**>(&originalMapLoad)},
+  {updateTiles,UpdateTiles,reinterpret_cast<void**>(&originalUpdateTiles)},
+  {texture,Texture,reinterpret_cast<void**>(&originalTexture)}};
+ const size_t count=std::size(hooks)-size_t(deferTexture);
+ size_t created=0;
+ auto rollback=[&](){for(size_t i=0;i<created;++i){MH_DisableHook(hooks[i].site);MH_RemoveHook(hooks[i].site);}return false;};
+ for(;created<count;++created)if(MH_CreateHook(hooks[created].site,hooks[created].entry,hooks[created].original)!=MH_OK)return rollback();
+ for(size_t i=0;i<count;++i)if(MH_QueueEnableHook(hooks[i].site)!=MH_OK)return rollback();
+ if(MH_ApplyQueued()!=MH_OK)return rollback();
  if(deferTexture){originalTexture=reinterpret_cast<decltype(originalTexture)>(texture);texturePending=true;}
  enabled=true;Log("EVENT_PACKAGE_RESOURCES_ACTIVE maps=%u TRACKS_writes=0 TexWizard_required=0 lifetime_acceptance_pending=1",unsigned(maps.size()));return true;
 }

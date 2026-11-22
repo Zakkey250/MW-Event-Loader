@@ -48,19 +48,30 @@ bool ReleaseGroundSupport(unsigned pursuit,unsigned departing){
  return after==0;
 }
 void ReleaseGroups(){
- if(!owner||(MWELNeoCurrentKey()!=0&&MWELNeoCurrentKey()!=owner))return;
+ const auto currentKey=MWELNeoCurrentKey();
+ if(!owner||(currentKey&&currentKey!=owner))return;
  for(unsigned slot=1;slot<createdPursuits.size();++slot){const auto pursuit=createdPursuits[slot];
   // First establish native list membership. A stale address can still carry
   // an old vtable after the native result/retry path frees its activity.
-  const auto groups=NativeGroups();
-  if(pursuit&&std::find(groups.begin(),groups.end(),pursuit)!=groups.end()&&Table(pursuit,0x892770)){
-   const auto target=TargetHandle(pursuit);
-   if(target&&target==createdTargets[slot]&&FindPursuit(target)==pursuit){
-    ReleaseGroundSupport(pursuit);
-    reinterpret_cast<void(__thiscall*)(unsigned)>(0x4198E0)(pursuit);
-   }
-  }
+  const auto target=createdTargets[slot];
+  if(pursuit&&target&&FindPursuit(target)==pursuit&&ReleaseGroundSupport(pursuit))
+   reinterpret_cast<void(__thiscall*)(unsigned)>(0x4198E0)(pursuit);
  }
+}
+void ReleasePlayerSupport(unsigned handle){
+ if(!handle||!Vehicle(handle))return;
+ if(const auto pursuit=FindPursuit(handle))ReleaseGroundSupport(pursuit);
+}
+unsigned HandOffPlayerSupport(unsigned eventKey){
+ const auto clone=registration_experiment::Find(eventKey);
+ if(!clone||!clone->race||!clone->package||mwel_rpd::CaseFile(clone->package->authoring)||
+    (!clone->hotPursuit&&!clone->package->authoring.value("cops",false)))return 0;
+ unsigned race=0,handle=0;
+ if(!Read(0x91E000,race)||!race||!Read(race+0x18,handle)||!handle)return 0;
+ // Retire transient roadblock support before race participants are released.
+ // The player's native pursuit activity itself remains active in roaming.
+ ReleasePlayerSupport(handle);
+ return handle;
 }
 void BindPerpetrator(unsigned pursuit,unsigned target){
  const auto car=Vehicle(target);unsigned ai=0,current=0,com=0;
@@ -76,13 +87,18 @@ void BindPerpetrator(unsigned pursuit,unsigned target){
 // the target vehicle's pursuit. A queued request can outlive event teardown.
 // Reject that invalid request before activation/count/list side effects.
 bool __fastcall SpawnForPursuit(unsigned manager,void*,unsigned pursuit,unsigned car){
- if((Active()||gauntlet_runtime::Duel())&&(!roadblockDepth||MWELRpdHotPursuitScope())){
+ unsigned race=0,play=0,world=0;
+ // The original spawn routine dereferences both the race status and world
+ // manager even for free-roam work queued before arrest or safehouse entry.
+ if(!Read(0x91E000,race)||!race||!Read(race+0x1960,play)||!Read(0x91E00C,world)||!world)return false;
+ const bool active=Active();
+ if((active||gauntlet_runtime::Duel())&&(!roadblockDepth||MWELRpdHotPursuitScope())){
   ApplyDeployment(manager+0x54,DeploymentLimit());
   if(ChaseCount(0)>=DeploymentLimit())return false;
  }
  // Queued native/NFRR requests may predate our per-frame allocation. Enforce
  // individual eligibility at the last native activation boundary as well.
- if(Active()&&!roadblockDepth){
+ if(active&&!roadblockDepth){
   // Native pooled pursuit activation chooses its own placement before
   // AddActivity can rebalance ownership. In RPD that produced cars beside
   // the officer with a suspect kilometres away. The checked target-relative
@@ -101,11 +117,13 @@ bool __fastcall SpawnForPursuit(unsigned manager,void*,unsigned pursuit,unsigned
   const auto target=TargetHandle(pursuit);
   if(!ReadyTarget(target)||!replacements.RefillReady(GetTickCount64())||replacements.Held(target,GetTickCount64()))return false;
  }
- unsigned race=0,play=0;
- if(Read(0x91E000,race)&&Read(race+0x1960,play)&&play!=1&&Table(pursuit,0x892770)){
-  unsigned target=0,sim=0,com=0,ownPursuit=0;Read(pursuit+0x74,target);Read(target+0x1C,sim);Read(sim+4,com);
+ if(play!=1&&Table(pursuit,0x892770)){
+  unsigned target=0,sim=0,handle=0,com=0,ownPursuit=0;
+  if(!Read(pursuit+0x74,target)||!Read(target+0x1C,sim)||!sim||
+     !Read(sim+8,handle)||Vehicle(handle)!=sim+0x80)return false;
+  Read(sim+4,com);
   const auto ai=com?reinterpret_cast<unsigned(__thiscall*)(unsigned,unsigned)>(0x5D59F0)(com,0x403700):0;
-  if(!Read(ai+0x70,ownPursuit)||!ownPursuit){Log("HOT_PURSUIT_STALE_REPLENISHMENT_REFUSED pursuit=%08X native_target_pursuit_missing=1",pursuit);return false;}
+  if(!Read(ai+0x70,ownPursuit)||ownPursuit!=pursuit){Log("HOT_PURSUIT_STALE_REPLENISHMENT_REFUSED pursuit=%08X target_owner=%08X",pursuit,ownPursuit);return false;}
  }
  const bool spawned=originalPursuitSpawn(manager,pursuit,car);
  // Placement commits its physics transform after the native activation

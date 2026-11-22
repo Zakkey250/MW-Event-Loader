@@ -1,46 +1,96 @@
 #pragma once
 namespace event_speedtraps {
-unsigned observedKey=0;std::set<unsigned> observed;
-std::map<unsigned,DWORD> retryAt;
-void Frame(unsigned key,bool running){
- if(key!=observedKey){observedKey=key;observed.clear();retryAt.clear();}
- if(!running||!key)return;
- auto owner=registration_experiment::Find(key);if(!owner||!owner->race)return;
- bool speedRace=false;for(const auto& p:packages)if(p.nativeNamespace==owner->name){speedRace=p.authoring.at("mode")=="speedtraprace";break;}
- if(!speedRace)return;
+struct PointState {
+ unsigned key=0;
+ DWORD nextSpawn=0,nextIcon=0;
+ bool observed=false,missingLogged=false;
+};
+const registration_experiment::Collection* observedRace=nullptr;
+unsigned observedKey=0,observedNativeKey=0;
+std::vector<PointState> points;
+void Reset(){
+ observedRace=nullptr;observedKey=0;observedNativeKey=0;points.clear();
+}
+void Frame(unsigned key,BYTE* race,bool running){
+ if(!running){if(observedRace)Reset();return;}
+ auto collection=registration_experiment::CurrentRaceCollection(race);
+ unsigned nativeKey=0;
+ if(!collection||!Copy(&collection->key,&nativeKey,4))return;
+ if(collection!=observedRace||key!=observedKey||nativeKey!=observedNativeKey){
+  observedRace=collection;observedKey=key;observedNativeKey=nativeKey;points.clear();
+  try{
+   auto owner=registration_experiment::Find(key);
+   auto keys=owner?owner->speedTrapKeys:registration_experiment::CollectionReferences(collection,"SpeedTrapList");
+   for(auto pointKey:keys)if(pointKey)points.push_back({pointKey});
+   if(worldLogEnabled&&!points.empty())Log("EVENT_SPEEDTRAP_LIST key=%08X count=%u package=%u",key?key:nativeKey,unsigned(points.size()),unsigned(owner!=nullptr));
+  }catch(const std::exception& error){if(worldLogEnabled)Log("EVENT_SPEEDTRAP_LIST_REFUSED key=%08X reason=%s",nativeKey,error.what());}
+ }
+ if(points.empty())return;
+ registration_experiment::GeometryTable geometry;
+ if(!geometry.Ready())return;
+
  using namespace NFSPluginSDK::MW05;
  static_assert(offsetof(GIcon,mFlags)==2&&offsetof(GIcon,mEmitter)==0xC&&sizeof(GIcon)==0x20,"Native icon ABI");
- for(const auto& child:registration_experiment::clones){
-  if(child->ownerKey!=key||child->templateKey!=0xB05871D3||child->placement)continue;
-  auto found=registration_experiment::geometryObjects.find(child->collection.key);if(found==registration_experiment::geometryObjects.end())continue;
-  auto trigger=static_cast<BYTE*>(found->second);unsigned table=0;if(!Copy(trigger,&table,4)||table!=0x8A3A84)continue;
-  // 00601E6F stores the icon at +C0. The SDK's non-virtual base layout does
-  // not include GRuntimeInstance's native leading vtable word.
-  GIcon* icon=nullptr;if(!Copy(trigger+0xC0,&icon,4)||!icon)continue;
-  GIcon::Type type{};if(!Copy(&icon->mType,&type,2)||(type!=GIcon::Type::Checkpoint&&type!=GIcon::Type::SpeedTrapInRace))continue;
-  // GIcon's transform is in render axes. Match native streaming residency:
-  // retain only nearby effects, and recreate a native emitter if its timed
-  // group has retired and cleared the icon's callback-owned pointer.
-  // eView's first pointer owns the verified render view/projection matrices.
-  void* matrices=nullptr;float view[16]{};if(!Copy(reinterpret_cast<void*>(0x919650),&matrices,4)||!matrices||!Copy(matrices,view,sizeof(view)))continue;
-  float camera[3]={-(view[12]*view[0]+view[13]*view[1]+view[14]*view[2]),-(view[12]*view[4]+view[13]*view[5]+view[14]*view[6]),-(view[12]*view[8]+view[13]*view[9]+view[14]*view[10])};
-  if(std::sqrt(std::pow(icon->mPosition.x-camera[0],2)+std::pow(icon->mPosition.y-camera[1],2)+std::pow(icon->mPosition.z-camera[2],2))>220.f)continue;
-  // Native race speed traps use checkpoint-type icons; their map visibility
-  // is independent of ShowInWorld. A sprint template hides normal checkpoints
-  // and can leave these owned icons map-only. Re-enable only SpeedTrapList's
-  // actual owned icons, keeping the native model/emitter and spawn lifecycle.
+ constexpr auto onMap=static_cast<unsigned short>(GIcon::Flags::ShowOnMap);
+ constexpr auto inWorld=static_cast<unsigned short>(GIcon::Flags::ShowInWorld);
+ constexpr auto spawned=static_cast<unsigned short>(GIcon::Flags::Spawned);
+ constexpr auto enabled=static_cast<unsigned short>(GIcon::Flags::Enabled);
+
+ // eView uses render-space axes, as does the position stored on GIcon.
+ void* matrices=nullptr;float view[16]{},camera[3]{};
+ const bool cameraReady=Copy(reinterpret_cast<void*>(0x919650),&matrices,4)&&matrices&&Copy(matrices,view,sizeof(view));
+ if(cameraReady)for(unsigned i=0;i<3;++i)camera[i]=-(view[12]*view[i*4]+view[13]*view[i*4+1]+view[14]*view[i*4+2]);
+ const auto now=GetTickCount();
+ for(auto& point:points){
+  const auto pointKey=point.key;
+  auto trigger=key?registration_experiment::LiveGeometry(geometry,pointKey):static_cast<BYTE*>(geometry.Lookup(pointKey));
+  unsigned table=0;BYTE active=0,kind=0;
+  if(!trigger||!Copy(trigger,&table,4)||table!=0x8A3A84||!Copy(trigger+0x19,&kind,1)||!(kind&1)||
+     !Copy(trigger+0xC4,&active,1)||!active||!registration_experiment::GeometryIdentity(trigger,pointKey))continue;
+  // The trigger owns this native icon until its deleting destructor.
+  GIcon* icon=nullptr;
+  if(!Copy(trigger+0xC0,&icon,4))continue;
+  if(!icon&&(!point.nextIcon||static_cast<LONG>(now-point.nextIcon)>=0)){
+   point.nextIcon=now+1000;
+   registration_experiment::Collection* attributes=nullptr;
+   if(Copy(trigger+8,&attributes,4)&&attributes){
+    auto position=reinterpret_cast<void*(__thiscall*)(void*,unsigned,unsigned)>(0x454190)(attributes,0x9F743A0E,0);
+    registration_experiment::owned_speedtrap_icons::Position coordinates{};
+    if(Copy(position,&coordinates,sizeof(coordinates))&&std::isfinite(coordinates.x)&&std::isfinite(coordinates.y)&&std::isfinite(coordinates.z))
+     icon=registration_experiment::owned_speedtrap_icons::RestoreRaceIcon(geometry.manager,trigger,coordinates);
+   }
+  }
+  if(!icon){
+   if(worldLogEnabled&&!point.missingLogged){
+    point.missingLogged=true;unsigned count=0;Copy(geometry.manager+0x2BC,&count,4);
+    Log("EVENT_SPEEDTRAP_ICON_UNAVAILABLE owner=%08X point=%08X native_icon_pool=%u",key?key:nativeKey,pointKey,count);
+   }
+   continue;
+  }
+  const auto type=icon->mType;
+  if(type!=GIcon::Type::Checkpoint&&type!=GIcon::Type::SpeedTrapInRace)continue;
   const auto before=static_cast<unsigned short>(icon->mFlags);
-  icon->mFlags=static_cast<GIcon::Flags>(before|static_cast<unsigned short>(GIcon::Flags::ShowInWorld));
-  bool spawned=false;
-  if(!(before&static_cast<unsigned short>(GIcon::Flags::Spawned))||!icon->mEmitter){auto now=GetTickCount();auto& last=retryAt[child->collection.key];if(!last||now-last>=1000){last=now;icon->Spawn();spawned=true;}}
-  BYTE modelVisible=0;if(icon->mModel)Copy(reinterpret_cast<BYTE*>(icon->mModel)+0x28,&modelVisible,1);
-  bool first=observed.insert(child->collection.key).second;
-  // Spawn allocates disabled resources at their default transform. The native
-  // Enable operation positions the model/emitter and resumes the emitter;
-  // merely setting GIcon::Enabled leaves invisible resources at the origin.
-  if(first||spawned||!(before&static_cast<unsigned short>(GIcon::Flags::Enabled))||(icon->mModel&&!modelVisible))
+  const auto dx=icon->mPosition.x-camera[0],dy=icon->mPosition.y-camera[1],dz=icon->mPosition.z-camera[2];
+  const bool nearby=cameraReady&&dx*dx+dy*dy+dz*dz<=220.f*220.f;
+  const auto flags=static_cast<unsigned short>(before|onMap|inWorld);
+  if(flags!=before)icon->mFlags=static_cast<GIcon::Flags>(flags);
+  if(!nearby)continue;
+
+  bool restored=false;
+  if((!(before&spawned)||!icon->mEmitter)&&(!point.nextSpawn||static_cast<LONG>(now-point.nextSpawn)>=0)){
+   point.nextSpawn=now+1000;icon->Spawn();restored=true;
+  }
+  BYTE modelVisible=0;
+  if(icon->mModel)Copy(reinterpret_cast<BYTE*>(icon->mModel)+0x28,&modelVisible,1);
+  // Spawn can allocate resources at their default transforms. Enable places
+  // and resumes them through the original game path.
+  if(restored||!(before&enabled)||(icon->mModel&&!modelVisible))
    reinterpret_cast<void(__thiscall*)(GIcon*)>(0x5E5BB0)(icon);
-  if(first){if(icon->mModel)Copy(reinterpret_cast<BYTE*>(icon->mModel)+0x28,&modelVisible,1);Log("EVENT_SPEEDTRAP_FIELD_ICON owner=%08X point=%08X type=%u flags_before=%04X flags_after=%04X native_model=%08X native_emitter=%08X native_spawn=1 native_enable=1 model_visible=%u position=%.3f,%.3f,%.3f custom_effects=0",key,child->collection.key,unsigned(type),before,unsigned(icon->mFlags),unsigned(icon->mModel),unsigned(icon->mEmitter),unsigned(modelVisible),icon->mPosition.x,icon->mPosition.y,icon->mPosition.z);}
+  if(worldLogEnabled&&!point.observed){
+   point.observed=true;
+   if(icon->mModel)Copy(reinterpret_cast<BYTE*>(icon->mModel)+0x28,&modelVisible,1);
+   Log("EVENT_SPEEDTRAP_FIELD_ICON owner=%08X point=%08X type=%u flags_before=%04X flags_after=%04X native_model=%08X native_emitter=%08X native_spawn=1 native_enable=1 model_visible=%u position=%.3f,%.3f,%.3f custom_effects=0",key?key:nativeKey,pointKey,unsigned(type),before,unsigned(icon->mFlags),unsigned(icon->mModel),unsigned(icon->mEmitter),unsigned(modelVisible),icon->mPosition.x,icon->mPosition.y,icon->mPosition.z);
+  }
  }
 }
 }

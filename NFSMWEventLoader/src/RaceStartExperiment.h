@@ -372,7 +372,7 @@ void ObserveFrameUnsafe(){
  }
  event_maps::Frame(OwnedRace(race),MWELNeoCurrentKey());
  checkpoint_display::Tick();
- event_speedtraps::Frame(MWELNeoCurrentKey(),Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6&&Read<unsigned>(race,0x1960)==1);
+ event_speedtraps::Frame(MWELNeoCurrentKey(),race,Read<unsigned>(reinterpret_cast<void*>(0x925E90))==6&&Read<unsigned>(race,0x1960)==1);
  if(radarRoamingTest&&!radarRoamingEntered&&!aborted&&firstDriving&&(!customTransitionTest||transitionCount<transitionLimit)&&GetTickCount64()-firstDriving>20000){
   radarRoamingEntered=true;roamingEnteredAt=GetTickCount64();event_maps::RestoreCalibrations();auto key=MWELNeoCurrentKey();
   if(!registration_experiment::ReleaseGeometry(key)){aborted=true;Log("EXPERIMENT_RACE_ABORT radar_roaming_geometry_release");return;}
